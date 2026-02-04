@@ -1,27 +1,97 @@
-# dlp_agent
+# dlp_agent — Enterprise-capable DLP Agent
 
-A minimal Windows DLP (Data Loss Prevention) endpoint agent scaffold written in modern C++ (MSYS2 UCRT64). It provides a compact, compilable foundation for endpoint telemetry, device control, and policy decisions that can be hardened for enterprise use.
+`dlp_agent` is an enterprise-capable Windows DLP (Data Loss Prevention) agent scaffold written in modern C++. It ships both a compact core agent and enterprise modules for kernel minifilter enforcement, secure telemetry, policy hot reload with signature verification, Rule Engine v2, anti-tamper protection, document content extraction, process attribution, and an enterprise test suite—so the full production pipeline is visible in-repo.
 
-## Feature highlights
-- **USB device monitoring**: Enumerates logical drives/removable devices, captures volume identifiers, and supports USB serial allowlists.
-- **File activity monitoring**: Watches `C:\Users` and removable drives via `ReadDirectoryChangesW` and captures create/write/delete/rename events.
-- **Enterprise DLP pipeline**: Driver/file events normalized, attributed, extracted, evaluated in RuleEngineV2, enforced, and recorded.
-- **Rule engine + PII detection**: Regex/keyword/hash rules plus PII detectors (email, phone, passport/ID, credit card, IBAN, configurable national IDs).
-- **Event storage**: Structured events written to SQLite (`dlp_agent.db`) and logs (`dlp_agent.log`) with rule metadata and content flags.
-- **Secure telemetry**: Batched, backoff-retrying telemetry with spool fallback and TLS pinning/mTLS hooks using libcurl.
+**See detailed enterprise modules → [ENTERPRISE_AUGMENTATIONS.md](ENTERPRISE_AUGMENTATIONS.md)**
 
-## Repository map
-- [config.json](config.json) — runtime configuration (extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable, rules_config, national_id_patterns, telemetry_* and policy_* fields).
-- [rules.json](rules.json) — example rule pack for the rule engine (regex/keyword/hash rules).
-- [src/main.cpp](src/main.cpp) — program entry and worker threads startup.
-- [src/file_watch.cpp](src/file_watch.cpp) — file watcher implementation using ReadDirectoryChangesW.
-- [src/usb_scan.cpp](src/usb_scan.cpp) — USB / drive enumerator.
-- [src/api.cpp](src/api.cpp) — secure telemetry sender/flush loop (no legacy heartbeat-only path).
-- [src/log.cpp](src/log.cpp), [src/sqlite_store.cpp](src/sqlite_store.cpp) — logging + SQLite storage.
-- [load.py](load.py) — helper to inspect `dlp_agent.db` (list tables, show recent rows, export CSV).
+## Architecture overview
 
-## Build (MSYS2 UCRT64)
+```
+Kernel Minifilter / User-mode Watchers
+               ↓
+        Event Normalizer
+               ↓
+      Process Attribution
+               ↓
+      Content Extraction
+               ↓
+        Rule Engine V2
+               ↓
+        Policy Decision
+               ↓
+  Enforcement (kernel + user)
+               ↓
+        Secure Telemetry
+               ↓
+          SQLite Store
+```
 
+## Core features
+- **USB device monitoring**: enumerates logical drives/removable devices and supports a USB serial allowlist.
+- **File activity monitoring**: watches `C:\Users` and removable drives via `ReadDirectoryChangesW` for create/write/delete/rename events.
+- **Policy checks**: size thresholds, removable-drive alerting, keyword scanning, and optional hashing.
+- **Rule engine + PII detection**: regex/keyword/hash rules and PII detectors (email, phone, passport/ID, credit card, IBAN, configurable national IDs).
+- **Event storage**: structured events written to SQLite (`dlp_agent.db`) and logs (`dlp_agent.log`).
+- **Telemetry**: batched telemetry sender with retry logging via libcurl.
+
+## Enterprise features
+Enterprise modules live under `src/enterprise/` and are documented in detail in [ENTERPRISE_AUGMENTATIONS.md](ENTERPRISE_AUGMENTATIONS.md).
+
+- **Kernel minifilter enforcement driver** (`src/enterprise/driver/`)
+- **Enterprise telemetry security** with mTLS/TLS pinning and spool fallback (`src/enterprise/telemetry/`)
+- **Policy hot reload + signature verification** (`src/enterprise/policy/`)
+- **Rule Engine v2** (`src/enterprise/rules/`)
+- **Anti-tamper protection** (`src/enterprise/anti_tamper/`)
+- **Document content extraction** (`src/enterprise/extraction/`)
+- **Process attribution** (`src/enterprise/process_attribution.*`)
+- **Enterprise test suite** (`tests/`)
+
+## Enforcement model (kernel + user-mode flow)
+1. **Kernel mode**: the minifilter driver intercepts file operations and queries user-mode for policy decisions.
+2. **User mode**: the agent evaluates rules and policy, then returns allow/deny and performs user-mode enforcement (shadow copy/quarantine/delete) when configured.
+
+## Module layout / project structure
+
+### Module table
+| Area | Path | Description |
+| --- | --- | --- |
+| Core agent entry | `src/main.cpp` | Startup, worker threads, and service loop integration. |
+| File monitoring | `src/file_watch.*` | `ReadDirectoryChangesW` watcher and event capture. |
+| USB monitoring | `src/usb_scan.*` | Drive and device enumeration, allowlist support. |
+| Policy evaluation | `src/rule_engine.*` | Core rule engine and matching logic. |
+| PII detection | `src/pii_detector.*` | PII pattern scanning for common identifiers. |
+| Event pipeline | `src/event_bus.*`, `src/filter.*`, `src/fingerprint.*`, `src/hash.*` | Normalization, filtering, hashing/fingerprint helpers. |
+| Storage & logging | `src/sqlite_store.*`, `src/log.*` | SQLite events storage and log output. |
+| Core telemetry | `src/api.*` | Baseline telemetry sender using libcurl. |
+| Enterprise driver | `src/enterprise/driver/` | Kernel minifilter driver project and INF. |
+| Enterprise telemetry | `src/enterprise/telemetry/` | Secure telemetry with mTLS/TLS pinning + spool. |
+| Enterprise policy | `src/enterprise/policy/` | Policy fetch, signature verification, and hot reload. |
+| Enterprise rules | `src/enterprise/rules/` | Rule Engine v2 implementation. |
+| Enterprise anti-tamper | `src/enterprise/anti_tamper/` | Integrity checks and watchdog hooks. |
+| Enterprise extraction | `src/enterprise/extraction/` | Content extractor stubs and extension routing. |
+| Enterprise attribution | `src/enterprise/process_attribution.*` | PID/PPID/SID enrichment. |
+| Enterprise tests | `tests/` | Test suite for policy reload, rules, telemetry, and enforcement. |
+| Config & rules | `config.json`, `rules.json` | Runtime config and example rule pack. |
+
+### Feature matrix (Core vs Enterprise)
+| Capability | Core | Enterprise |
+| --- | --- | --- |
+| USB monitoring | ✅ | ✅ |
+| File activity monitoring | ✅ | ✅ |
+| Keyword scanning / hashing | ✅ | ✅ |
+| PII detection | ✅ | ✅ |
+| Rule engine | ✅ (v1) | ✅ (v2) |
+| Secure telemetry (mTLS/TLS pinning, spool) | ❌ | ✅ |
+| Policy hot reload + signature verification | ❌ | ✅ |
+| Kernel minifilter enforcement | ❌ | ✅ |
+| Anti-tamper protection | ❌ | ✅ |
+| Document content extraction | ❌ (baseline only) | ✅ |
+| Process attribution | ❌ | ✅ |
+| Enterprise test suite | ❌ | ✅ |
+
+## Build instructions
+
+### Core agent (MSYS2 UCRT64)
 1. Open MSYS2 UCRT64 shell.
 2. Install required packages if missing:
 
@@ -42,89 +112,23 @@ make clean
 make -j1
 ```
 
-## Run
+### Enterprise minifilter driver (Visual Studio + WDK)
+- Open `src/enterprise/driver/dlp_minifilter.vcxproj` in Visual Studio.
+- Install the Windows Driver Kit (WDK).
+- Build `Release | x64` to produce `dlp_minifilter.sys`, then install via `dlp_minifilter.inf`.
 
-PowerShell (interactive):
+## Security model
+- **Policy integrity**: enterprise policy modules support signature verification for policy hot reload.
+- **Telemetry security**: enterprise telemetry module supports mTLS and TLS pinning with spool fallback.
+- **Anti-tamper**: enterprise module provides integrity checks and watchdog hooks for agent survivability.
+- **Least privilege**: run with the minimum privileges needed; avoid SYSTEM without additional hardening.
 
-```powershell
-.\dlp_agent.exe
-# press 'q' then Enter to quit
-```
+## Limitations
+- Enterprise modules are included but require integration and production hardening.
+- Full PDF/DOCX/XLSX parsers are not bundled; content extraction is extensible but requires external libraries.
+- Kernel enforcement requires driver signing and deployment steps outside the MSYS2 build.
 
-PowerShell (redirect output):
-
-```powershell
-.\dlp_agent.exe *> run_all.txt
-Get-Content run_all.txt -Wait
-```
-
-## Configuration notes
-Edit [config.json](config.json) to change `extension_filter`, `size_threshold`, or the USB allowlist. Additional DLP controls:
-
-- `content_keywords`: case-insensitive keywords scanned from the first `max_scan_bytes` of matching files.
-- `max_scan_bytes`: maximum bytes to scan for keywords.
-- `hash_max_bytes`: maximum file size to hash (SHA-256).
-- `block_on_match`: if `true`, keyword hits are marked as `BLOCK` (otherwise `ALERT`).
-- `alert_on_removable`: if `true`, file events on removable drives are flagged.
-- `rules_config`: path to a JSON/YAML rule file for the rule engine.
-- `national_id_patterns`: regex patterns for national IDs (used by PII detector).
-- `telemetry_*`: secure telemetry endpoint and mTLS/TLS pinning configuration.
-- `policy_*`: policy fetch configuration and signature verification fields.
-- `quarantine_dir`, `shadow_copy_dir`: enforcement output locations.
-- `enable_shadow_copy`, `enable_quarantine`: enforcement toggles.
-
-## Architecture (enterprise pipeline)
-
-```
-Driver/File Event
-   ↓
-Event Normalizer
-   ↓
-Process Attribution
-   ↓
-Content Extraction
-   ↓
-RuleEngineV2
-   ↓
-Policy Decision
-   ↓
-Enforcement (driver/user-mode)
-   ↓
-SecureTelemetry
-   ↓
-SQLite Storage
-```
-
-### Execution flow description
-1. Minifilter or user-mode watcher emits a file event.
-2. Event normalizer standardizes action, path, and device context.
-3. Process attribution enriches with PID/PPID/command line and SID.
-4. Content extraction pulls text and metadata; hashes/fingerprints are computed.
-5. RuleEngineV2 evaluates rule matches and context conditions.
-6. Policy decision resolves enforcement action and final decision.
-7. Enforcement occurs in driver (block-on-deny) or user-mode (shadow copy/quarantine/delete).
-8. SecureTelemetry batches and retries events, with disk spool fallback.
-9. SQLite stores normalized events, rules, and content flags.
-
-### Replaced legacy modules
-- Legacy rule engine usage → RuleEngineV2 pipeline integration.
-- Heartbeat-only telemetry path → SecureTelemetry batching/backoff/spool path.
-- Raw file scanning logic → content extraction pipeline with structured flags.
-
-### Integrated enterprise modules
-- `enterprise/driver` minifilter communication port integration.
-- `enterprise/process_attribution` for PID/PPID/SID enrichment.
-- `enterprise/extraction` content extractor hooks.
-- `enterprise/rules` RuleEngineV2 runtime.
-- `enterprise/policy` policy fetch + version manager for hot reload.
-- `enterprise/telemetry` SecureTelemetry with TLS pinning/mTLS hooks.
-- `enterprise/anti_tamper` startup checks + watchdog + periodic self-check.
-
-### Remaining TODO security gaps
-- Real signature verification (PKI/HMAC) for policies beyond placeholder hashing.
-- Full extraction for PDF/DOCX/XLSX (currently stubs).
-- Signed driver package distribution and kernel-mode enforcement hardening.
-
-## Operational notes
-- This repository is a scaffold intended for extension: service installation, enterprise signing, and full content extraction should be added for production.
-- Avoid running as SYSTEM without additional hardening and auditing.
+## Roadmap
+- Integrate Rule Engine v2 and enterprise policy hot reload into the core service loop.
+- Complete production-grade signature verification and key management for policy updates.
+- Expand content extraction and PII detection coverage for additional document formats.
