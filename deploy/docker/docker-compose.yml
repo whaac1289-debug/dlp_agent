@@ -21,10 +21,12 @@ services:
     environment:
       DLP_DATABASE_URL: postgresql+psycopg2://dlp:dlp@db:5432/dlp
       DLP_REDIS_URL: redis://redis:6379/0
-      DLP_JWT_SECRET: change_me
-      DLP_ADMIN_EMAIL: admin@dlp.local
-      DLP_ADMIN_PASSWORD: change_me
-      DLP_LICENSE_KEY: replace_me
+      DLP_JWT_SECRET: ${DLP_JWT_SECRET}
+      DLP_ADMIN_EMAIL: ${DLP_ADMIN_EMAIL}
+      DLP_ADMIN_PASSWORD: ${DLP_ADMIN_PASSWORD}
+      DLP_LICENSE_KEY: ${DLP_LICENSE_KEY}
+      DLP_ENROLLMENT_SIGNING_SECRET: ${DLP_ENROLLMENT_SIGNING_SECRET}
+      DLP_ALLOWED_ORIGINS: ${DLP_ALLOWED_ORIGINS}
     depends_on:
       - db
       - redis
@@ -38,10 +40,12 @@ services:
     environment:
       DLP_DATABASE_URL: postgresql+psycopg2://dlp:dlp@db:5432/dlp
       DLP_REDIS_URL: redis://redis:6379/0
-      DLP_JWT_SECRET: change_me
-      DLP_ADMIN_EMAIL: admin@dlp.local
-      DLP_ADMIN_PASSWORD: change_me
-      DLP_LICENSE_KEY: replace_me
+      DLP_JWT_SECRET: ${DLP_JWT_SECRET}
+      DLP_ADMIN_EMAIL: ${DLP_ADMIN_EMAIL}
+      DLP_ADMIN_PASSWORD: ${DLP_ADMIN_PASSWORD}
+      DLP_LICENSE_KEY: ${DLP_LICENSE_KEY}
+      DLP_ENROLLMENT_SIGNING_SECRET: ${DLP_ENROLLMENT_SIGNING_SECRET}
+      DLP_ALLOWED_ORIGINS: ${DLP_ALLOWED_ORIGINS}
     depends_on:
       - server
   dashboard:

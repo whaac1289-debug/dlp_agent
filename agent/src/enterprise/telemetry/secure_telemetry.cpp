@@ -8,6 +8,7 @@
 #include <random>
 #include <sstream>
 #include <thread>
+#include "../../hash.h"
 
 namespace dlp::telemetry {
 
@@ -43,6 +44,31 @@ bool SecureHttpClient::PostJson(const std::string& path, const std::string& json
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "dlp_agent/2.0");
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
+    if (!config_.auth_token.empty()) {
+        std::string auth_header = "Authorization: Bearer " + config_.auth_token;
+        headers = curl_slist_append(headers, auth_header.c_str());
+    }
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+    std::random_device rd;
+    std::uniform_int_distribution<int> dist(0, 15);
+    std::string nonce;
+    nonce.reserve(16);
+    for (int i = 0; i < 16; ++i) {
+        nonce.push_back("0123456789abcdef"[dist(rd)]);
+    }
+    std::string ts_header = "X-Timestamp: " + std::to_string(timestamp);
+    std::string nonce_header = "X-Nonce: " + nonce;
+    std::string version_header = "X-Agent-Protocol-Version: " + config_.protocol_version;
+    headers = curl_slist_append(headers, ts_header.c_str());
+    headers = curl_slist_append(headers, nonce_header.c_str());
+    headers = curl_slist_append(headers, version_header.c_str());
+    if (!config_.shared_secret.empty()) {
+        std::string canonical = "POST\n" + path + "\n" + std::to_string(timestamp) + "\n" + nonce + "\n" + json_body;
+        std::string signature = hmac_sha256_hex(config_.shared_secret, canonical);
+        std::string sig_header = "X-Signature: " + signature;
+        headers = curl_slist_append(headers, sig_header.c_str());
+    }
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body.c_str());
     CURLcode res = curl_easy_perform(curl);

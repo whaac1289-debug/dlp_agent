@@ -39,6 +39,9 @@ struct TelemetryConfig {
     std::string spool_path;
     std::string device_id;
     std::string policy_version;
+    std::string auth_token;
+    std::string shared_secret;
+    std::string protocol_version{"1.0"};
     size_t max_batch_size{250};
     size_t max_spool_size_bytes{50 * 1024 * 1024};
     size_t max_pending_events{2000};

@@ -3,6 +3,7 @@ from server.models.models import (  # noqa: F401
     Agent,
     AgentConfig,
     AuditLog,
+    EnrollmentToken,
     Event,
     LoginHistory,
     Policy,

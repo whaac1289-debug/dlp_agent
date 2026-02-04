@@ -14,12 +14,14 @@ flowchart LR
         Driver[Minifilter Driver]
     end
     subgraph ControlPlane
-        API[API / Auth]
+        API[API / Auth / RBAC]
         Ingest[Ingest Queue]
         Detect[Detection Pipeline]
         Policy[Policy Engine]
+        Audit[Audit Log]
+        Enroll[Enrollment Service]
         SIEM[SIEM Export]
-        Metrics[Metrics]
+        Metrics[Metrics / Prometheus]
         DB[(PostgreSQL)]
         Redis[(Redis)]
     end
@@ -29,7 +31,11 @@ flowchart LR
     API --> Ingest
     Ingest --> Detect
     Detect --> Policy
+    Policy --> Audit
+    API --> Enroll
     Policy --> DB
+    Audit --> DB
+    Enroll --> DB
     Ingest --> SIEM
     Ingest --> Metrics
     API --> Redis
@@ -44,11 +50,12 @@ flowchart LR
 - **ingest**: Queueing and enrichment of agent events.
 - **detection**: Content and signal analysis (entropy, archive scanning, etc.).
 - **policy**: Rule loading, policy evaluation, enforcement decisions.
-- **security**: Replay defense, rate limiting, signing/HMAC, and auth primitives.
+- **security**: Replay defense, signing/HMAC, JWT validation, CSRF, and rate limiting.
 - **rbac**: Role-based access control decisions.
 - **license**: License validation gate.
 - **siem**: Syslog/SIEM export adapters.
-- **metrics**: Structured metric points for telemetry aggregation.
+- **metrics**: Prometheus counters/gauges and metric points for telemetry aggregation.
+- **audit**: Immutable audit log entries for security-critical actions.
 
 ### Agent domains
 - **config**: Signed local configuration and rule pack selection.
