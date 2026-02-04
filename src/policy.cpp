@@ -16,3 +16,32 @@ bool is_usb_allowed(const std::string &serial) {
     }
     return false;
 }
+
+PolicyDecision evaluate_file_policy(bool size_exceeded,
+                                    bool keyword_hit,
+                                    bool removable_drive,
+                                    bool block_on_match,
+                                    bool alert_on_removable) {
+    PolicyDecision out;
+    std::vector<std::string> reasons;
+    if (size_exceeded) reasons.push_back("size_threshold");
+    if (keyword_hit) reasons.push_back("content_keyword");
+    if (removable_drive && alert_on_removable) reasons.push_back("removable_drive");
+
+    if (!reasons.empty()) {
+        out.reason.clear();
+        for (size_t i = 0; i < reasons.size(); ++i) {
+            if (i) out.reason += ",";
+            out.reason += reasons[i];
+        }
+        if (keyword_hit && block_on_match) {
+            out.decision = "BLOCK";
+        } else {
+            out.decision = "ALERT";
+        }
+    } else {
+        out.decision = "ALLOW";
+        out.reason = "policy_ok";
+    }
+    return out;
+}

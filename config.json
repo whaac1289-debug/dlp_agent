@@ -2,5 +2,10 @@
   "server_url": "http://localhost:8080/api/events",
   "extension_filter": [".txt", ".log", ".docx"],
   "size_threshold": 10485760,
-  "usb_allow_serials": []
+  "usb_allow_serials": [],
+  "content_keywords": ["confidential", "secret", "personal data"],
+  "max_scan_bytes": 65536,
+  "hash_max_bytes": 1048576,
+  "block_on_match": false,
+  "alert_on_removable": true
 }
