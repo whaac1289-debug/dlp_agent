@@ -1,6 +1,8 @@
 #include "usb_scan.h"
 #include "log.h"
 #include "sqlite_store.h"
+#include "event_bus.h"
+#include "policy.h"
 
 #include <windows.h>
 #include "config.h"
@@ -31,8 +33,11 @@ void usb_scan_thread() {
                 UINT type = GetDriveTypeA(root);
                 if (type == DRIVE_REMOVABLE || type == DRIVE_FIXED) {
                     std::string serial = get_volume_serial(drv);
-                    std::string ev = "device:" + std::string(1,drv) + " serial=" + serial;
-                    sqlite_insert_event(ev);
+                    DeviceEvent ev;
+                    ev.drive_letter = std::string(1, drv);
+                    ev.serial = serial;
+                    ev.allowed = serial.empty() ? false : is_usb_allowed(serial);
+                    emit_device_event(ev);
                 }
             }
         }

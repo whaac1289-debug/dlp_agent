@@ -8,9 +8,11 @@ Asosiy imkoniyatlar
 - Fayl voqealari `config.json` dagi `extension_filter` ga qarab filtrlash (masalan .txt, .log, .docx)
 - Hodisalarni faylga va SQLite bazaga yozish (`dlp_agent.log`, `dlp_agent.db`)
 - Libcurl yordamida serverga (konfiguratsiyaga ko‘ra) POST yuborish (heartbeat)
+- O‘rta darajali DLP tekshiruvlari: fayl hajmi bo‘yicha threshold, removable disklar uchun alert, kontent bo‘yicha keyword skan, kichik fayllar uchun SHA-256 hash
+- Strukturalangan fayl/qurilma voqealari `events_v2` va `device_events` jadvallarida saqlanadi
 
 Fayllar va katalog
-- `config.json` — ish vaqti konfiguratsiyasi (server_url, extension_filter, size_threshold, usb_allow_serials)
+- `config.json` — ish vaqti konfiguratsiyasi (server_url, extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable)
 - `src/` — manba kodlari (main, usb_scan, file_watch, api, log, sqlite_store va boshqalar)
 - `load.py` — `dlp_agent.db` faylini tekshirish uchun Python yordamchi (jadval ro‘yxati, so‘nggi satrlar, CSV eksport)
 
@@ -59,6 +61,14 @@ python load.py --db dlp_agent.db --table events --limit 50
 Konfiguratsiya o‘zgartirish
 
 `config.json` faylida `extension_filter` ro‘yxatini yangilang (masalan `".docx"` qo‘shish), `server_url` ni belgilang va agentni qayta ishga tushiring.
+
+O‘rta daraja DLP uchun yangi kalitlar:
+
+- `content_keywords`: `max_scan_bytes` ichida case-insensitive keyword qidirish.
+- `max_scan_bytes`: keyword skan qilish uchun maksimum bayt.
+- `hash_max_bytes`: SHA-256 hisoblash uchun maksimum fayl hajmi.
+- `block_on_match`: `true` bo‘lsa keyword topilganda `BLOCK` belgilanadi.
+- `alert_on_removable`: `true` bo‘lsa removable diskdagi voqealar flag qilinadi.
 
 GitHub ga yuklash
 
