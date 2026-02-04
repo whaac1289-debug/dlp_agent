@@ -1,0 +1,4 @@
+[pip-audit]
+require-hashes = false
+format = "columns"
+ignore-vulns = []
