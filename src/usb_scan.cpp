@@ -14,7 +14,7 @@
 static std::string get_volume_serial(char drive) {
     char root[4] = { (char)drive, ':', '\\', '\0' };
     DWORD volser = 0;
-        if (GetVolumeInformationA(root, nullptr, 0, &volser, nullptr, nullptr, nullptr, 0)) {
+    if (GetVolumeInformationA(root, nullptr, 0, &volser, nullptr, nullptr, nullptr, 0)) {
         char buf[32];
         snprintf(buf, sizeof(buf), "%08lX", (unsigned long)volser);
         return std::string(buf);

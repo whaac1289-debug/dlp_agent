@@ -4,6 +4,7 @@
 struct FileEvent;
 
 bool sqlite_init(const char *path);
+void sqlite_shutdown();
 void sqlite_insert_event(const std::string &ev);
 void sqlite_insert_log(const char *ts, const char *level, const char *msg);
 void sqlite_insert_file_event(const struct FileEvent &ev);

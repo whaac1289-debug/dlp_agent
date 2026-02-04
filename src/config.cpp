@@ -1,8 +1,10 @@
 #include "config.h"
-#include <fstream>
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
+#include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 std::string g_server_url = "http://localhost:8080/api/events";
 std::vector<std::string> g_extension_filter = {".txt", ".log"};
@@ -15,6 +17,60 @@ bool g_block_on_match = false;
 bool g_alert_on_removable = true;
 
 std::atomic<bool> g_running{false};
+
+static std::string trim_copy(const std::string &s) {
+    size_t start = 0;
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) {
+        ++start;
+    }
+    size_t end = s.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
+        --end;
+    }
+    return s.substr(start, end - start);
+}
+
+static std::string to_lower_copy(const std::string &s) {
+    std::string out = s;
+    std::transform(out.begin(), out.end(), out.begin(),
+                   [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+    return out;
+}
+
+static void normalize_list(std::vector<std::string> &items, bool lower) {
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> out;
+    out.reserve(items.size());
+    for (const auto &raw : items) {
+        std::string entry = trim_copy(raw);
+        if (lower) {
+            entry = to_lower_copy(entry);
+        }
+        if (entry.empty()) continue;
+        if (seen.insert(entry).second) {
+            out.push_back(entry);
+        }
+    }
+    items.swap(out);
+}
+
+static void normalize_extension_filter(std::vector<std::string> &exts) {
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> out;
+    out.reserve(exts.size());
+    for (const auto &raw : exts) {
+        std::string entry = trim_copy(raw);
+        entry = to_lower_copy(entry);
+        if (entry.empty()) continue;
+        if (entry[0] != '.') {
+            entry.insert(entry.begin(), '.');
+        }
+        if (seen.insert(entry).second) {
+            out.push_back(entry);
+        }
+    }
+    exts.swap(out);
+}
 
 static std::string extract_string(const std::string &s, const std::string &key) {
     auto pos = s.find("\"" + key + "\"");
@@ -99,6 +155,27 @@ bool load_config(const char *path) {
     g_hash_max_bytes = extract_number(s, "hash_max_bytes", g_hash_max_bytes);
     g_block_on_match = extract_bool(s, "block_on_match", g_block_on_match);
     g_alert_on_removable = extract_bool(s, "alert_on_removable", g_alert_on_removable);
+
+    normalize_extension_filter(g_extension_filter);
+    normalize_list(g_usb_allow_serials, true);
+    normalize_list(g_content_keywords, true);
+
+    if (g_extension_filter.empty()) {
+        g_extension_filter = {".txt", ".log"};
+        fprintf(stderr, "config warning: extension_filter empty, using defaults\n");
+    }
+    if (g_max_scan_bytes == 0) {
+        g_max_scan_bytes = 64 * 1024;
+        fprintf(stderr, "config warning: max_scan_bytes invalid, using default\n");
+    }
+    if (g_hash_max_bytes == 0) {
+        g_hash_max_bytes = 1024 * 1024;
+        fprintf(stderr, "config warning: hash_max_bytes invalid, using default\n");
+    }
+    if (g_server_url.empty()) {
+        g_server_url = "http://localhost:8080/api/events";
+        fprintf(stderr, "config warning: server_url empty, using default\n");
+    }
 
     return true;
 }

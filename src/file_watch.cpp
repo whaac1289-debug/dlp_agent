@@ -9,6 +9,7 @@
 
 #include <windows.h>
 #include <string>
+#include <chrono>
 #include <thread>
 #include <vector>
 #include <sstream>
@@ -128,8 +129,7 @@ static bool keyword_hit(const std::vector<unsigned char> &data) {
     std::string hay(reinterpret_cast<const char*>(data.data()), data.size());
     hay = to_lower_str_fw(hay);
     for (const auto &kw : g_content_keywords) {
-        std::string needle = to_lower_str_fw(kw);
-        if (!needle.empty() && hay.find(needle) != std::string::npos) return true;
+        if (!kw.empty() && hay.find(kw) != std::string::npos) return true;
     }
     return false;
 }
