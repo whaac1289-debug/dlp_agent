@@ -82,6 +82,7 @@ class Event(Base):
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True)
+    event_id = Column(String(64), unique=True, nullable=False, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
     event_type = Column(String(50), nullable=False)
@@ -114,12 +115,17 @@ class PolicyRule(Base):
     policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
     rule_type = Column(String(50), nullable=False)
     pattern = Column(Text)
+    keywords = Column(JSON)
+    hashes = Column(JSON)
     file_extension = Column(String(20))
     min_size = Column(Integer)
     max_size = Column(Integer)
     usb_only = Column(Boolean, default=False)
     action = Column(String(20), nullable=False)
     severity = Column(String(20), default="medium")
+    severity_score = Column(Integer, default=0)
+    tags = Column(JSON)
+    is_whitelist = Column(Boolean, default=False)
     priority = Column(Integer, default=100)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
@@ -157,6 +163,18 @@ class LoginHistory(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     ip_address = Column(String(64))
     success = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+
+class EnrollmentToken(Base):
+    __tablename__ = "enrollment_tokens"
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    agent_uuid = Column(String(64))
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
 

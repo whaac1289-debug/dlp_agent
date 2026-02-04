@@ -51,6 +51,9 @@ void api_sender_thread() {
     cfg.spool_path = g_telemetry_spool_path;
     cfg.device_id = get_hostname();
     cfg.policy_version = g_policy_version;
+    cfg.auth_token = g_agent_jwt;
+    cfg.shared_secret = g_agent_shared_secret;
+    cfg.protocol_version = g_agent_protocol_version;
 
     RetryPolicy retry;
     {

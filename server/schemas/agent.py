@@ -9,6 +9,9 @@ class AgentRegisterRequest(BaseModel):
     ip_address: str
     version: str
     tenant: str
+    enrollment_token: str | None = None
+    enrollment_package: str | None = None
+    enrollment_signature: str | None = None
 
 
 class AgentRegisterResponse(BaseModel):

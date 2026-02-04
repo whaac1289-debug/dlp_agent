@@ -6,6 +6,8 @@ RUN pip install --no-cache-dir -r /srv/requirements.txt
 COPY server /srv/server
 COPY alembic /srv/alembic
 COPY alembic.ini /srv/alembic.ini
+COPY server/entrypoint.sh /srv/entrypoint.sh
 ENV PYTHONPATH=/srv
 
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN chmod +x /srv/entrypoint.sh
+CMD ["/srv/entrypoint.sh"]
