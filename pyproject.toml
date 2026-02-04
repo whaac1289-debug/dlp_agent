@@ -17,3 +17,7 @@ ignore_missing_imports = true
 [tool.bandit]
 exclude_dirs = ["agent", "dashboard"]
 skips = ["B101"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["server/tests"]
