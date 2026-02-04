@@ -17,6 +17,26 @@ bool g_block_on_match = false;
 bool g_alert_on_removable = true;
 std::string g_rules_path = "rules.json";
 std::vector<std::string> g_national_id_patterns;
+std::string g_telemetry_endpoint = "https://localhost:8443/api/v2/telemetry";
+std::string g_telemetry_spool_path = "telemetry_spool";
+std::string g_telemetry_ca_bundle;
+std::string g_telemetry_client_cert;
+std::string g_telemetry_client_key;
+std::string g_telemetry_pinned_spki;
+std::string g_quarantine_dir = "C:\\ProgramData\\DLPAgent\\Quarantine";
+std::string g_shadow_copy_dir = "C:\\ProgramData\\DLPAgent\\ShadowCopy";
+std::string g_policy_endpoint;
+std::string g_policy_api_key;
+std::string g_policy_hmac_key;
+std::string g_policy_public_key;
+std::string g_policy_store_path = "policy_snapshot.json";
+std::string g_config_signature_path = "config.json.sig";
+std::string g_expected_binary_hash;
+int g_block_severity_threshold = 8;
+int g_quarantine_severity_threshold = 9;
+int g_shadow_copy_severity_threshold = 6;
+bool g_enable_shadow_copy = true;
+bool g_enable_quarantine = true;
 
 std::atomic<bool> g_running{false};
 
@@ -154,6 +174,36 @@ bool load_config(const char *path) {
     if (!national_patterns.empty()) g_national_id_patterns = national_patterns;
     auto rules_path = extract_string(s, "rules_config");
     if (!rules_path.empty()) g_rules_path = rules_path;
+    auto telemetry_endpoint = extract_string(s, "telemetry_endpoint");
+    if (!telemetry_endpoint.empty()) g_telemetry_endpoint = telemetry_endpoint;
+    auto telemetry_spool = extract_string(s, "telemetry_spool_path");
+    if (!telemetry_spool.empty()) g_telemetry_spool_path = telemetry_spool;
+    auto telemetry_ca = extract_string(s, "telemetry_ca_bundle");
+    if (!telemetry_ca.empty()) g_telemetry_ca_bundle = telemetry_ca;
+    auto telemetry_cert = extract_string(s, "telemetry_client_cert");
+    if (!telemetry_cert.empty()) g_telemetry_client_cert = telemetry_cert;
+    auto telemetry_key = extract_string(s, "telemetry_client_key");
+    if (!telemetry_key.empty()) g_telemetry_client_key = telemetry_key;
+    auto telemetry_spki = extract_string(s, "telemetry_pinned_spki");
+    if (!telemetry_spki.empty()) g_telemetry_pinned_spki = telemetry_spki;
+    auto quarantine_dir = extract_string(s, "quarantine_dir");
+    if (!quarantine_dir.empty()) g_quarantine_dir = quarantine_dir;
+    auto shadow_copy_dir = extract_string(s, "shadow_copy_dir");
+    if (!shadow_copy_dir.empty()) g_shadow_copy_dir = shadow_copy_dir;
+    auto policy_endpoint = extract_string(s, "policy_endpoint");
+    if (!policy_endpoint.empty()) g_policy_endpoint = policy_endpoint;
+    auto policy_api_key = extract_string(s, "policy_api_key");
+    if (!policy_api_key.empty()) g_policy_api_key = policy_api_key;
+    auto policy_hmac_key = extract_string(s, "policy_hmac_key");
+    if (!policy_hmac_key.empty()) g_policy_hmac_key = policy_hmac_key;
+    auto policy_public_key = extract_string(s, "policy_public_key");
+    if (!policy_public_key.empty()) g_policy_public_key = policy_public_key;
+    auto policy_store_path = extract_string(s, "policy_store_path");
+    if (!policy_store_path.empty()) g_policy_store_path = policy_store_path;
+    auto config_sig = extract_string(s, "config_signature_path");
+    if (!config_sig.empty()) g_config_signature_path = config_sig;
+    auto expected_hash = extract_string(s, "expected_binary_hash");
+    if (!expected_hash.empty()) g_expected_binary_hash = expected_hash;
 
     // size_threshold (number)
     g_size_threshold = extract_number(s, "size_threshold", g_size_threshold);
@@ -161,6 +211,11 @@ bool load_config(const char *path) {
     g_hash_max_bytes = extract_number(s, "hash_max_bytes", g_hash_max_bytes);
     g_block_on_match = extract_bool(s, "block_on_match", g_block_on_match);
     g_alert_on_removable = extract_bool(s, "alert_on_removable", g_alert_on_removable);
+    g_block_severity_threshold = static_cast<int>(extract_number(s, "block_severity_threshold", g_block_severity_threshold));
+    g_quarantine_severity_threshold = static_cast<int>(extract_number(s, "quarantine_severity_threshold", g_quarantine_severity_threshold));
+    g_shadow_copy_severity_threshold = static_cast<int>(extract_number(s, "shadow_copy_severity_threshold", g_shadow_copy_severity_threshold));
+    g_enable_shadow_copy = extract_bool(s, "enable_shadow_copy", g_enable_shadow_copy);
+    g_enable_quarantine = extract_bool(s, "enable_quarantine", g_enable_quarantine);
 
     normalize_extension_filter(g_extension_filter);
     normalize_list(g_usb_allow_serials, true);
@@ -186,6 +241,14 @@ bool load_config(const char *path) {
     if (g_rules_path.empty()) {
         g_rules_path = "rules.json";
         fprintf(stderr, "config warning: rules_config empty, using default\n");
+    }
+    if (g_telemetry_endpoint.empty()) {
+        g_telemetry_endpoint = "https://localhost:8443/api/v2/telemetry";
+        fprintf(stderr, "config warning: telemetry_endpoint empty, using default\n");
+    }
+    if (g_telemetry_spool_path.empty()) {
+        g_telemetry_spool_path = "telemetry_spool";
+        fprintf(stderr, "config warning: telemetry_spool_path empty, using default\n");
     }
 
     return true;

@@ -3,6 +3,7 @@
 #include "sqlite_store.h"
 #include "event_bus.h"
 #include "policy.h"
+#include "rule_engine.h"
 
 #include <windows.h>
 #include "config.h"
@@ -38,7 +39,18 @@ void usb_scan_thread() {
                     DeviceEvent ev;
                     ev.drive_letter = std::string(1, drv);
                     ev.serial = serial;
-                    ev.allowed = serial.empty() ? false : is_usb_allowed(serial);
+                    bool allowed = serial.empty() ? false : is_usb_allowed(serial);
+                    RuleContext context;
+                    context.drive_type = "REMOVABLE";
+                    context.destination = ev.drive_letter;
+                    auto decision = g_rule_engine.evaluate(context, {});
+                    PolicyDecision policy_decision = resolve_rule_decision(decision, true, g_alert_on_removable);
+                    if (policy_decision.action == RuleAction::Block || policy_decision.action == RuleAction::Quarantine) {
+                        allowed = false;
+                    }
+                    ev.allowed = allowed;
+                    ev.decision = policy_decision.decision;
+                    ev.reason = policy_decision.reason.empty() ? (allowed ? "policy_ok" : "policy_block") : policy_decision.reason;
                     current_seen[drv] = {serial, ev.allowed};
                     auto it = last_seen.find(drv);
                     if (it == last_seen.end() || it->second.first != serial || it->second.second != ev.allowed) {

@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 struct FileEvent {
@@ -7,7 +8,12 @@ struct FileEvent {
     std::string action;
     std::string path;
     std::string user;
+    std::string user_sid;
     std::string drive_type;
+    std::string process_name;
+    uint32_t pid = 0;
+    uint32_t ppid = 0;
+    std::string command_line;
     size_t size_bytes = 0;
     std::string sha256;
     std::string decision;
@@ -18,6 +24,8 @@ struct DeviceEvent {
     std::string drive_letter;
     std::string serial;
     bool allowed = false;
+    std::string decision;
+    std::string reason;
 };
 
 void emit_event(const std::string &ev);

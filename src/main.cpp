@@ -6,7 +6,9 @@
 #include "api.h"
 #include "sqlite_store.h"
 #include "rule_engine.h"
+#include "enterprise/anti_tamper/anti_tamper.h"
 
+#include <windows.h>
 #include <thread>
 #include <vector>
 
@@ -20,6 +22,28 @@ int main() {
         fprintf(stderr, "Failed to init logger\n");
         return 1;
     }
+
+    dlp::security::AntiTamper anti_tamper(g_expected_binary_hash);
+    char module_path[MAX_PATH];
+    if (GetModuleFileNameA(nullptr, module_path, MAX_PATH)) {
+        auto result = anti_tamper.VerifyBinaryIntegrity(module_path);
+        if (!result.ok) {
+            log_error("Binary integrity check failed: %s", result.detail.c_str());
+            log_shutdown();
+            return 1;
+        }
+    }
+    if (!anti_tamper.VerifyConfigSignature("config.json", g_config_signature_path)) {
+        log_error("Config signature verification failed");
+        log_shutdown();
+        return 1;
+    }
+    if (anti_tamper.IsDebuggerPresent()) {
+        log_error("Debugger detected, exiting");
+        log_shutdown();
+        return 1;
+    }
+    anti_tamper.StartServiceWatchdog("DlpAgent");
 
     if (!sqlite_init("dlp_agent.db")) {
         log_error("Failed to initialize sqlite database");

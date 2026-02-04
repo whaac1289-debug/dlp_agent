@@ -98,7 +98,6 @@ src/enterprise/
 src/enterprise/rules/
   rule_engine_v2.h
   rule_engine_v2.cpp
-  rule_schema_v2.json
 ```
 
 **Key workflow**
@@ -134,24 +133,7 @@ src/enterprise/anti_tamper/
 - Add files to the agent project.
 - Use `Dbghelp`/`WinTrust` for integrity checks.
 
-## 7) Windows Service Hardening
-
-**Project structure**
-```
-src/enterprise/service/
-  service_installer_manifest.xml
-```
-
-**Key workflow**
-- Configure service auto-start, restricted SID, ACLs, and isolation.
-
-**Integration points**
-- Use manifest values in service installer logic or deployment scripts.
-
-**Build instructions (Visual Studio / MSVC)**
-- Apply manifest settings in your installer (WiX / SC.exe / custom tool).
-
-## 8) Document Content Extraction
+## 7) Document Content Extraction
 
 **Project structure**
 ```
@@ -170,7 +152,7 @@ src/enterprise/extraction/
 - Add files to the agent project.
 - Integrate with PDF/DOCX/XLSX parsers (PDFium, OpenXML).
 
-## 9) Test Suite
+## 8) Test Suite
 
 **Project structure**
 ```
@@ -188,3 +170,10 @@ tests/
 
 **Build instructions (Visual Studio / MSVC)**
 - Compile with `DLP_ENABLE_TESTS` to enable the test entry points.
+
+## Removed enterprise artifacts
+
+```
+src/enterprise/rules/rule_schema_v2.json
+src/enterprise/service/service_installer_manifest.xml
+```
