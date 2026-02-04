@@ -1,10 +1,15 @@
 #include <cassert>
 
+#include "../src/policy.h"
+
 #if defined(DLP_ENABLE_TESTS)
 
 int main() {
-    // TODO: Integration test that simulates policy response for kernel filter.
-    assert(true);
+    PolicyDecision decision;
+    decision.action = RuleAction::Block;
+    assert(should_block_driver(decision));
+    decision.action = RuleAction::Alert;
+    assert(!should_block_driver(decision));
     return 0;
 }
 

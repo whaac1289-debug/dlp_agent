@@ -7,8 +7,6 @@
 
 #include "config.h"
 
-RuleEngine g_rule_engine;
-
 static std::string trim_copy(const std::string &s) {
     size_t start = 0;
     while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;

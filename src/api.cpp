@@ -5,7 +5,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <curl/curl.h>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -50,6 +49,8 @@ void api_sender_thread() {
     cfg.client_key_path = g_telemetry_client_key;
     cfg.pinned_spki_hash = g_telemetry_pinned_spki;
     cfg.spool_path = g_telemetry_spool_path;
+    cfg.device_id = get_hostname();
+    cfg.policy_version = g_policy_version;
 
     RetryPolicy retry;
     {
@@ -57,13 +58,16 @@ void api_sender_thread() {
         g_telemetry = std::make_unique<SecureTelemetry>(cfg, retry);
     }
 
-    std::string hostname = get_hostname();
     while (g_running) {
-        std::string payload = "{\"type\":\"heartbeat\",\"host\":\"" + hostname + "\"}";
-        telemetry_enqueue("heartbeat", payload);
+        std::string policy_version;
+        {
+            std::lock_guard<std::mutex> lock(g_policy_mutex);
+            policy_version = g_policy_version;
+        }
         {
             std::lock_guard<std::mutex> lock(g_telemetry_mutex);
             if (g_telemetry) {
+                g_telemetry->UpdateContext(cfg.device_id, policy_version);
                 g_telemetry->Flush();
             }
         }

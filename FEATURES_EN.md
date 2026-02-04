@@ -30,12 +30,12 @@
 - Stores structured events in `events_v2` and `device_events` tables.
 
 ### 6) Telemetry
-- Sends heartbeat JSON POSTs to `server_url` via libcurl.
+- Sends secure telemetry batches to `telemetry_endpoint` via libcurl.
 - Logs retryable failures locally for troubleshooting.
 
 ## Configuration surface
 The agent behavior is primarily controlled via `config.json`:
-- `server_url` — API endpoint for event batches.
+- `telemetry_endpoint` — API endpoint for secure telemetry batches.
 - `extension_filter` — array of file extensions to monitor (e.g., [".txt", ".docx"]).
 - `size_threshold` — numeric size filter (bytes).
 - `usb_allow_serials` — allowlisted USB serial strings.

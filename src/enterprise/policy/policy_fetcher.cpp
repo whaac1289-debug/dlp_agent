@@ -1,5 +1,7 @@
 #include "policy_fetcher.h"
 
+#include "hash.h"
+
 #include <curl/curl.h>
 #include <fstream>
 #include <sstream>
@@ -14,6 +16,18 @@ static size_t write_cb(char* ptr, size_t size, size_t nmemb, void* userdata) {
     return size * nmemb;
 }
 
+static std::string extract_string_field(const std::string& s, const std::string& key) {
+    auto pos = s.find("\"" + key + "\"");
+    if (pos == std::string::npos) return "";
+    auto colon = s.find(':', pos);
+    if (colon == std::string::npos) return "";
+    auto first = s.find('"', colon + 1);
+    if (first == std::string::npos) return "";
+    auto second = s.find('"', first + 1);
+    if (second == std::string::npos) return "";
+    return s.substr(first + 1, second - first - 1);
+}
+
 std::optional<PolicyPayload> PolicyFetcher::Fetch() {
     if (config_.endpoint.empty()) {
         return std::nullopt;
@@ -26,7 +40,11 @@ std::optional<PolicyPayload> PolicyFetcher::Fetch() {
         std::ostringstream oss;
         oss << input.rdbuf();
         payload.json = oss.str();
-        payload.version = "file";
+        payload.version = extract_string_field(payload.json, "version");
+        if (payload.version.empty()) {
+            payload.version = "file";
+        }
+        payload.signature = extract_string_field(payload.json, "signature");
         return payload;
     }
     CURL* curl = curl_easy_init();
@@ -54,13 +72,24 @@ std::optional<PolicyPayload> PolicyFetcher::Fetch() {
         return std::nullopt;
     }
     payload.json = response;
-    payload.version = std::to_string(code);
+    payload.signature = extract_string_field(payload.json, "signature");
+    payload.version = extract_string_field(payload.json, "version");
+    if (payload.version.empty()) {
+        payload.version = std::to_string(code);
+    }
     return payload;
 }
 
 bool PolicyFetcher::VerifySignature(const PolicyPayload& payload) {
-    (void)payload;
-    return config_.public_key_pem.empty() || !payload.signature.empty();
+    if (!config_.hmac_key.empty()) {
+        std::string material = payload.json + config_.hmac_key;
+        std::string expected = sha256_hex(material.data(), material.size());
+        return !payload.signature.empty() && payload.signature == expected;
+    }
+    if (!config_.public_key_pem.empty()) {
+        return !payload.signature.empty();
+    }
+    return true;
 }
 
 }  // namespace dlp::policy

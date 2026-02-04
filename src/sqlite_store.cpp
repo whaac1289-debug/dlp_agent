@@ -56,6 +56,11 @@ bool sqlite_init(const char *path) {
         "command_line TEXT,"
         "size_bytes INTEGER,"
         "sha256 TEXT,"
+        "rule_id TEXT,"
+        "rule_name TEXT,"
+        "severity INTEGER,"
+        "content_flags TEXT,"
+        "device_context TEXT,"
         "decision TEXT,"
         "reason TEXT);"
         "CREATE TABLE IF NOT EXISTS device_events("
@@ -84,6 +89,11 @@ bool sqlite_init(const char *path) {
         ensure_column(g_db, "events_v2", "pid", "INTEGER");
         ensure_column(g_db, "events_v2", "ppid", "INTEGER");
         ensure_column(g_db, "events_v2", "command_line", "TEXT");
+        ensure_column(g_db, "events_v2", "rule_id", "TEXT");
+        ensure_column(g_db, "events_v2", "rule_name", "TEXT");
+        ensure_column(g_db, "events_v2", "severity", "INTEGER");
+        ensure_column(g_db, "events_v2", "content_flags", "TEXT");
+        ensure_column(g_db, "events_v2", "device_context", "TEXT");
         ensure_column(g_db, "device_events", "decision", "TEXT");
         ensure_column(g_db, "device_events", "reason", "TEXT");
     }
@@ -127,8 +137,8 @@ void sqlite_insert_file_event(const FileEvent &ev) {
     sqlite3_stmt *st = nullptr;
     sqlite3_prepare_v2(
         g_db,
-        "INSERT INTO events_v2(event_type, action, path, user, user_sid, drive_type, process_name, pid, ppid, command_line, size_bytes, sha256, decision, reason) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        "INSERT INTO events_v2(event_type, action, path, user, user_sid, drive_type, process_name, pid, ppid, command_line, size_bytes, sha256, rule_id, rule_name, severity, content_flags, device_context, decision, reason) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         -1,
         &st,
         nullptr);
@@ -145,8 +155,13 @@ void sqlite_insert_file_event(const FileEvent &ev) {
     sqlite3_bind_text(st, 10, ev.command_line.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int64(st, 11, static_cast<sqlite3_int64>(ev.size_bytes));
     sqlite3_bind_text(st, 12, ev.sha256.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(st, 13, ev.decision.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(st, 14, ev.reason.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 13, ev.rule_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 14, ev.rule_name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(st, 15, static_cast<sqlite3_int64>(ev.severity));
+    sqlite3_bind_text(st, 16, ev.content_flags.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 17, ev.device_context.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 18, ev.decision.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 19, ev.reason.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_step(st);
     sqlite3_finalize(st);
 }

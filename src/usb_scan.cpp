@@ -3,7 +3,7 @@
 #include "sqlite_store.h"
 #include "event_bus.h"
 #include "policy.h"
-#include "rule_engine.h"
+#include "enterprise/rules/rule_engine_v2.h"
 
 #include <windows.h>
 #include "config.h"
@@ -43,7 +43,8 @@ void usb_scan_thread() {
                     RuleContext context;
                     context.drive_type = "REMOVABLE";
                     context.destination = ev.drive_letter;
-                    auto decision = g_rule_engine.evaluate(context, {});
+                    context.removable_drive = true;
+                    auto decision = dlp::rules::g_rule_engine_v2.Evaluate(context, {});
                     PolicyDecision policy_decision = resolve_rule_decision(decision, true, g_alert_on_removable);
                     if (policy_decision.action == RuleAction::Block || policy_decision.action == RuleAction::Quarantine) {
                         allowed = false;

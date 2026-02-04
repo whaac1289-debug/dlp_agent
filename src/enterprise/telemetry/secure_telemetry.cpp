@@ -60,7 +60,9 @@ bool SecureHttpClient::PostJson(const std::string& path, const std::string& json
     return ok;
 }
 
-DiskSpoolQueue::DiskSpoolQueue(std::string root_path) : root_path_(std::move(root_path)) {
+DiskSpoolQueue::DiskSpoolQueue(std::string root_path, size_t max_size_bytes)
+    : root_path_(std::move(root_path)),
+      max_size_bytes_(max_size_bytes) {
     LoadSize();
 }
 
@@ -84,6 +86,9 @@ bool DiskSpoolQueue::Enqueue(const TelemetryBatch& batch) {
     namespace fs = std::filesystem;
     if (root_path_.empty()) return false;
     fs::create_directories(root_path_);
+    if (max_size_bytes_ > 0 && size_bytes_ >= max_size_bytes_) {
+        return false;
+    }
     auto now = std::chrono::system_clock::now().time_since_epoch();
     auto stamp = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     std::string file_path = root_path_ + "/batch_" + std::to_string(stamp) + ".json";
@@ -150,16 +155,21 @@ SecureTelemetry::SecureTelemetry(TelemetryConfig config, RetryPolicy retry)
     : config_(std::move(config)),
       retry_(retry),
       http_(config_),
-      spool_(config_.spool_path) {}
+      spool_(config_.spool_path, config_.max_spool_size_bytes) {}
 
 void SecureTelemetry::EnqueueEvent(const TelemetryEvent& event) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (pending_.size() >= config_.max_pending_events) {
+        return;
+    }
     pending_.push_back(event);
 }
 
 TelemetryBatch SecureTelemetry::BuildBatch() {
     TelemetryBatch batch;
     std::lock_guard<std::mutex> lock(mutex_);
+    batch.device_id = config_.device_id;
+    batch.policy_version = config_.policy_version;
     while (!pending_.empty() && batch.events.size() < config_.max_batch_size) {
         batch.events.push_back(pending_.front());
         pending_.pop_front();
@@ -221,6 +231,14 @@ void SecureTelemetry::Flush() {
         }
         return true;
     });
+}
+
+void SecureTelemetry::UpdateContext(const std::string& device_id, const std::string& policy_version) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!device_id.empty()) {
+        config_.device_id = device_id;
+    }
+    config_.policy_version = policy_version;
 }
 
 }  // namespace dlp::telemetry
