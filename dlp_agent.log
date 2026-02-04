@@ -1,0 +1,108 @@
+2026-02-04 11:29:16 [INFO] USB scan thread started
+2026-02-04 11:29:16 [INFO] Service loop started
+2026-02-04 11:29:16 [INFO] File watch thread started
+2026-02-04 11:29:16 [INFO] API sender thread started
+2026-02-04 11:29:16 [INFO] heartbeat
+2026-02-04 11:29:18 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:29:31 [INFO] heartbeat
+2026-02-04 11:29:46 [INFO] heartbeat
+2026-02-04 11:29:51 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:30:01 [INFO] heartbeat
+2026-02-04 11:30:17 [INFO] heartbeat
+2026-02-04 11:30:23 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:30:32 [INFO] heartbeat
+2026-02-04 11:30:47 [INFO] heartbeat
+2026-02-04 11:30:55 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:31:02 [INFO] heartbeat
+2026-02-04 11:31:02 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:31:02 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:31:02 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:31:02 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:31:03 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:31:03 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:31:03 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:31:17 [INFO] heartbeat
+2026-02-04 11:31:28 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:31:32 [INFO] heartbeat
+2026-02-04 11:31:47 [INFO] heartbeat
+2026-02-04 11:32:00 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:32:02 [INFO] heartbeat
+2026-02-04 11:32:17 [INFO] heartbeat
+2026-02-04 11:32:32 [INFO] heartbeat
+2026-02-04 11:32:32 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:32:47 [INFO] heartbeat
+2026-02-04 11:33:03 [INFO] heartbeat
+2026-02-04 11:33:05 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:33:18 [INFO] heartbeat
+2026-02-04 11:33:33 [INFO] heartbeat
+2026-02-04 11:33:37 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:33:48 [INFO] heartbeat
+2026-02-04 11:34:03 [INFO] heartbeat
+2026-02-04 11:34:09 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:34:18 [INFO] heartbeat
+2026-02-04 11:34:33 [INFO] heartbeat
+2026-02-04 11:34:42 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:34:48 [INFO] heartbeat
+2026-02-04 11:35:03 [INFO] heartbeat
+2026-02-04 11:35:14 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:35:18 [INFO] heartbeat
+2026-02-04 11:35:34 [INFO] heartbeat
+2026-02-04 11:35:46 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:35:49 [INFO] heartbeat
+2026-02-04 11:36:04 [INFO] heartbeat
+2026-02-04 11:36:19 [INFO] heartbeat
+2026-02-04 11:36:19 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:36:34 [INFO] heartbeat
+2026-02-04 11:36:49 [INFO] heartbeat
+2026-02-04 11:36:51 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:37:04 [INFO] heartbeat
+2026-02-04 11:37:19 [INFO] heartbeat
+2026-02-04 11:37:24 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:37:34 [INFO] heartbeat
+2026-02-04 11:37:49 [INFO] heartbeat
+2026-02-04 11:37:56 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:38:04 [INFO] heartbeat
+2026-02-04 11:38:20 [INFO] heartbeat
+2026-02-04 11:38:27 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:38:27 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:38:27 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:38:27 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:38:27 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:38:28 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:38:28 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Roaming\kingsoft\office6\log\ksomisc\ksomisc_2026_02_04.log
+2026-02-04 11:38:28 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:38:35 [INFO] heartbeat
+2026-02-04 11:38:50 [INFO] heartbeat
+2026-02-04 11:39:01 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:39:05 [INFO] heartbeat
+2026-02-04 11:39:20 [INFO] heartbeat
+2026-02-04 11:39:33 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:39:35 [INFO] heartbeat
+2026-02-04 11:39:50 [INFO] heartbeat
+2026-02-04 11:40:05 [INFO] heartbeat
+2026-02-04 11:40:05 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:40:20 [INFO] heartbeat
+2026-02-04 11:40:35 [INFO] heartbeat
+2026-02-04 11:40:38 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:40:51 [INFO] heartbeat
+2026-02-04 11:41:06 [INFO] heartbeat
+2026-02-04 11:41:10 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:41:21 [INFO] heartbeat
+2026-02-04 11:41:36 [INFO] heartbeat
+2026-02-04 11:41:42 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:41:51 [INFO] heartbeat
+2026-02-04 11:42:06 [INFO] heartbeat
+2026-02-04 11:42:15 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:42:21 [INFO] heartbeat
+2026-02-04 11:42:36 [INFO] heartbeat
+2026-02-04 11:42:47 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:42:47 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Local\Google\Chrome\User Data\Default\IndexedDB\https_chatgpt.com_0.indexeddb.leveldb\000020.log
+2026-02-04 11:42:48 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Local\Google\Chrome\User Data\Default\IndexedDB\https_chatgpt.com_0.indexeddb.leveldb\000020.log
+2026-02-04 11:42:51 [INFO] heartbeat
+2026-02-04 11:42:59 [INFO] event: file_event:ADDED:C:\Users\O.Yuldashov\AppData\Local\Google\Chrome\User Data\Default\Local Storage\leveldb\001318.log
+2026-02-04 11:42:59 [INFO] event: file_event:MODIFIED:C:\Users\O.Yuldashov\AppData\Local\Google\Chrome\User Data\Default\Local Storage\leveldb\001316.log
+2026-02-04 11:42:59 [INFO] event: file_event:REMOVED:C:\Users\O.Yuldashov\AppData\Local\Google\Chrome\User Data\Default\Local Storage\leveldb\001316.log
+2026-02-04 11:43:06 [INFO] heartbeat
+2026-02-04 11:43:19 [ERROR] curl failed: Could not connect to server
+2026-02-04 11:43:22 [INFO] heartbeat
+2026-02-04 11:43:37 [INFO] heartbeat
