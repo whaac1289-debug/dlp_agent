@@ -15,6 +15,8 @@ size_t g_max_scan_bytes = 64 * 1024;
 size_t g_hash_max_bytes = 1024 * 1024;
 bool g_block_on_match = false;
 bool g_alert_on_removable = true;
+std::string g_rules_path = "rules.json";
+std::vector<std::string> g_national_id_patterns;
 
 std::atomic<bool> g_running{false};
 
@@ -148,6 +150,10 @@ bool load_config(const char *path) {
     if (!serials.empty()) g_usb_allow_serials = serials;
     auto keywords = extract_array(s, "content_keywords");
     if (!keywords.empty()) g_content_keywords = keywords;
+    auto national_patterns = extract_array(s, "national_id_patterns");
+    if (!national_patterns.empty()) g_national_id_patterns = national_patterns;
+    auto rules_path = extract_string(s, "rules_config");
+    if (!rules_path.empty()) g_rules_path = rules_path;
 
     // size_threshold (number)
     g_size_threshold = extract_number(s, "size_threshold", g_size_threshold);
@@ -159,6 +165,7 @@ bool load_config(const char *path) {
     normalize_extension_filter(g_extension_filter);
     normalize_list(g_usb_allow_serials, true);
     normalize_list(g_content_keywords, true);
+    normalize_list(g_national_id_patterns, false);
 
     if (g_extension_filter.empty()) {
         g_extension_filter = {".txt", ".log"};
@@ -175,6 +182,10 @@ bool load_config(const char *path) {
     if (g_server_url.empty()) {
         g_server_url = "http://localhost:8080/api/events";
         fprintf(stderr, "config warning: server_url empty, using default\n");
+    }
+    if (g_rules_path.empty()) {
+        g_rules_path = "rules.json";
+        fprintf(stderr, "config warning: rules_config empty, using default\n");
     }
 
     return true;

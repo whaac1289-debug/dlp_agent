@@ -12,6 +12,8 @@ extern size_t g_max_scan_bytes;
 extern size_t g_hash_max_bytes;
 extern bool g_block_on_match;
 extern bool g_alert_on_removable;
+extern std::string g_rules_path;
+extern std::vector<std::string> g_national_id_patterns;
 
 extern std::atomic<bool> g_running;
 

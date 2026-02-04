@@ -1,5 +1,6 @@
 #include "sqlite_store.h"
 #include "event_bus.h"
+#include "fingerprint.h"
 #include <sqlite3.h>
 #include <mutex>
 
@@ -29,7 +30,16 @@ bool sqlite_init(const char *path) {
         "ts DATETIME DEFAULT CURRENT_TIMESTAMP,"
         "drive TEXT,"
         "serial TEXT,"
-        "allowed INTEGER);";
+        "allowed INTEGER);"
+        "CREATE TABLE IF NOT EXISTS file_fingerprints("
+        "id INTEGER PRIMARY KEY,"
+        "ts DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "path TEXT,"
+        "size_bytes INTEGER,"
+        "full_hash TEXT,"
+        "partial_hash TEXT);"
+        "CREATE INDEX IF NOT EXISTS idx_fingerprints_full_hash ON file_fingerprints(full_hash);"
+        "CREATE INDEX IF NOT EXISTS idx_fingerprints_partial_hash ON file_fingerprints(partial_hash);";
     char *err = nullptr;
     int rc = sqlite3_exec(g_db, schema, nullptr, nullptr, &err);
     if (err) { sqlite3_free(err); }
@@ -108,4 +118,55 @@ void sqlite_insert_device_event(const std::string &drive, const std::string &ser
     sqlite3_bind_int(st, 3, allowed ? 1 : 0);
     sqlite3_step(st);
     sqlite3_finalize(st);
+}
+
+void sqlite_insert_fingerprint(const FileFingerprint &fp) {
+    std::lock_guard<std::mutex> lk(g_db_mtx);
+    if (!g_db) return;
+    sqlite3_stmt *st = nullptr;
+    sqlite3_prepare_v2(
+        g_db,
+        "INSERT INTO file_fingerprints(path, size_bytes, full_hash, partial_hash) VALUES(?, ?, ?, ?);",
+        -1,
+        &st,
+        nullptr);
+    if (!st) return;
+    sqlite3_bind_text(st, 1, fp.path.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(st, 2, static_cast<sqlite3_int64>(fp.size_bytes));
+    sqlite3_bind_text(st, 3, fp.full_hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 4, fp.partial_hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_step(st);
+    sqlite3_finalize(st);
+}
+
+bool sqlite_find_fingerprint(const std::string &full_hash,
+                             const std::string &partial_hash,
+                             size_t size_bytes,
+                             std::string &path_out) {
+    std::lock_guard<std::mutex> lk(g_db_mtx);
+    if (!g_db) return false;
+    sqlite3_stmt *st = nullptr;
+    sqlite3_prepare_v2(
+        g_db,
+        "SELECT path FROM file_fingerprints "
+        "WHERE (full_hash = ? AND ? != '') OR (partial_hash = ? AND size_bytes = ?) "
+        "LIMIT 1;",
+        -1,
+        &st,
+        nullptr);
+    if (!st) return false;
+    sqlite3_bind_text(st, 1, full_hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 2, full_hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(st, 3, partial_hash.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(st, 4, static_cast<sqlite3_int64>(size_bytes));
+    bool found = false;
+    if (sqlite3_step(st) == SQLITE_ROW) {
+        const unsigned char *text = sqlite3_column_text(st, 0);
+        if (text) {
+            path_out = reinterpret_cast<const char *>(text);
+            found = true;
+        }
+    }
+    sqlite3_finalize(st);
+    return found;
 }
