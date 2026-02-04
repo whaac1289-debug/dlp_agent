@@ -1,22 +1,26 @@
 # dlp_agent — Oʻzbekcha hujjat
 
-Ushbu repo Windows uchun minimal DLP (Data Loss Prevention) endpoint agentining C++ asosidagi shablonidir. Loyihani MSYS2 UCRT64 (g++) yordamida yig‘ish va ishga tushirish bo‘yicha ko‘rsatmalar quyida keltirilgan.
+`dlp_agent` — Windows uchun minimal DLP (Data Loss Prevention) endpoint agenti bo‘lib, zamonaviy C++ da yozilgan. Ushbu repo telemetriya yig‘ish, qurilma nazorati va siyosat qarorlarini soddalashtirilgan, kengaytirish mumkin bo‘lgan poydevor sifatida taqdim etadi.
 
-Asosiy imkoniyatlar
-- USB qurilmalarni tekshirish (removable drayvlar)
-- `C:\Users` va removable drayvlarda fayl faoliyatini `ReadDirectoryChangesW` orqali kuzatish
-- Fayl voqealari `config.json` dagi `extension_filter` ga qarab filtrlash (masalan .txt, .log, .docx)
-- Hodisalarni faylga va SQLite bazaga yozish (`dlp_agent.log`, `dlp_agent.db`)
-- Libcurl yordamida serverga (konfiguratsiyaga ko‘ra) POST yuborish (heartbeat)
-- O‘rta darajali DLP tekshiruvlari: fayl hajmi bo‘yicha threshold, removable disklar uchun alert, kontent bo‘yicha keyword skan, kichik fayllar uchun SHA-256 hash
-- Strukturalangan fayl/qurilma voqealari `events_v2` va `device_events` jadvallarida saqlanadi
+## Asosiy imkoniyatlar
+- **USB qurilmalarni kuzatish**: Removable drayvlar va logical drive’larni aniqlaydi, volume identifikatorlarini yozadi, USB serial allowlist’ni qo‘llab-quvvatlaydi.
+- **Fayl faoliyatini kuzatish**: `ReadDirectoryChangesW` orqali `C:\Users` va removable drayvlarda create/write/delete/rename hodisalarini kuzatadi.
+- **Siyosat tekshiruvlari**: Extension filter, size threshold, removable disklar uchun alert, keyword skan va ixtiyoriy SHA-256 hash.
+- **Rule engine + PII detektorlari**: Regex/keyword/hash qoidalari va PII detektorlari (email, telefon, passport/ID, kredit karta, IBAN, sozlanadigan national ID) mavjud.
+- **Hodisalarni saqlash**: Strukturalangan hodisalar SQLite (`dlp_agent.db`) va log faylga (`dlp_agent.log`) yoziladi.
+- **Telemetriya**: libcurl orqali sozlanadigan server URL ga heartbeat POST yuboriladi.
 
-Fayllar va katalog
-- `config.json` — ish vaqti konfiguratsiyasi (server_url, extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable)
-- `src/` — manba kodlari (main, usb_scan, file_watch, api, log, sqlite_store va boshqalar)
-- `load.py` — `dlp_agent.db` faylini tekshirish uchun Python yordamchi (jadval ro‘yxati, so‘nggi satrlar, CSV eksport)
+## Fayllar va kataloglar
+- `config.json` — runtime konfiguratsiya (server_url, extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable, rules_config, national_id_patterns).
+- `rules.json` — rule engine uchun namunaviy qoidalar (regex/keyword/hash).
+- `src/main.cpp` — kirish nuqtasi va worker thread’lar.
+- `src/file_watch.cpp` — ReadDirectoryChangesW asosidagi file watcher.
+- `src/usb_scan.cpp` — USB/drive enumerator.
+- `src/api.cpp` — libcurl asosidagi API (heartbeat) yuborish.
+- `src/log.cpp`, `src/sqlite_store.cpp` — loglash va SQLite saqlash.
+- `load.py` — `dlp_agent.db` ni ko‘rish/eksport qilish uchun Python yordamchi.
 
-Qurish (MSYS2 UCRT64)
+## Qurish (MSYS2 UCRT64)
 
 1. MSYS2 UCRT64 shellini oching.
 2. Zarur paketlarni o‘rnating (agar yo‘q bo‘lsa):
@@ -24,7 +28,8 @@ Qurish (MSYS2 UCRT64)
 ```bash
 pacman -Syu
 pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make \
-    mingw-w64-ucrt-x86_64-libcurl mingw-w64-ucrt-x86_64-sqlite3
+    mingw-w64-ucrt-x86_64-libcurl mingw-w64-ucrt-x86_64-sqlite3 \
+    mingw-w64-ucrt-x86_64-wbemidl mingw-w64-ucrt-x86_64-crypt32
 ```
 
 3. Loyihani yig‘ish:
@@ -35,7 +40,7 @@ make clean
 make -j1
 ```
 
-Ishga tushirish
+## Ishga tushirish
 
 PowerShell (interaktiv):
 
@@ -51,42 +56,17 @@ PowerShell (chiqishni faylga yo'naltirish):
 Get-Content run_all.txt -Wait
 ```
 
-Bazani tekshirish (Python):
-
-```bash
-python load.py --db dlp_agent.db --list-tables
-python load.py --db dlp_agent.db --table events --limit 50
-```
-
-Konfiguratsiya o‘zgartirish
-
-`config.json` faylida `extension_filter` ro‘yxatini yangilang (masalan `".docx"` qo‘shish), `server_url` ni belgilang va agentni qayta ishga tushiring.
-
-O‘rta daraja DLP uchun yangi kalitlar:
+## Konfiguratsiya
+`config.json` faylida `server_url`, `extension_filter`, `size_threshold` va USB allowlist’ni yangilang. Qo‘shimcha DLP nazoratlari:
 
 - `content_keywords`: `max_scan_bytes` ichida case-insensitive keyword qidirish.
 - `max_scan_bytes`: keyword skan qilish uchun maksimum bayt.
 - `hash_max_bytes`: SHA-256 hisoblash uchun maksimum fayl hajmi.
 - `block_on_match`: `true` bo‘lsa keyword topilganda `BLOCK` belgilanadi.
 - `alert_on_removable`: `true` bo‘lsa removable diskdagi voqealar flag qilinadi.
+- `rules_config`: rule engine qoidalari uchun JSON/YAML fayl yo‘li.
+- `national_id_patterns`: national ID uchun regex namunalar (PII detector ishlatadi).
 
-GitHub ga yuklash
-
-```powershell
-git add .
-git commit -m "Initial commit"
-# agar origin noto'g'ri bo'lsa:
-# git remote set-url origin https://github.com/<your-username>/<repo>.git
-git push -u origin main
-```
-
-Yoki `gh` CLI yordamida yangi repo yaratish va push:
-
-```bash
-gh auth login
-gh repo create <your-username>/<repo> --public --source=. --remote=origin --push
-```
-
-Eslatmalar
-- Hozirgi kod scaffold vazifasini bajaradi; ishlab chiqarish uchun qo‘shimcha xavfsizlik, xatoliklarni yaxshilash, service sifatida o‘rnatish va WMI asosida USB voqealarini aniq o‘qish kerak.
-- Men GitHub ga push qila olmayman; sizning kompyuteringizda git/gh orqali push qiling.
+## Operatsion eslatmalar
+- Repo — poydevor. Ishlab chiqarish uchun service o‘rnatish, xatoliklarni kuchliroq boshqarish, xavfsiz transport (TLS pinning/mTLS), batching/backpressure va WMI parsingni mustahkamlash zarur.
+- Qo‘shimcha hardening va audit bo‘lmasa SYSTEM huquqlarida ishga tushirmaslik tavsiya etiladi.
