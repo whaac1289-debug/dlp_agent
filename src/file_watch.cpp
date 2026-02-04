@@ -13,7 +13,6 @@
 #include <vector>
 #include <sstream>
 #include <algorithm>
-#include <cctype>
 
 static std::string wc_to_utf8(const wchar_t *w, int len) {
     if (!w) return std::string();
