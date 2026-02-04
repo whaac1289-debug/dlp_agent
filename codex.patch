@@ -1,0 +1,915 @@
+diff --git a/README.md b/README.md
+index 4281809452601e23cc4ac11bc5f0be1360b2d759..79b4d603874e4aba77a14a3b2d74ac94ef38b78c 100644
+--- a/README.md
++++ b/README.md
+@@ -1,36 +1,38 @@
+ # dlp_agent
+ 
+ Minimal Windows DLP endpoint agent scaffold (C++, MSYS2 UCRT64). This repository contains a small, compilable agent that:
+ 
+ - Monitors USB devices and enumerates removable drives.
+ - Watches file activity under `C:\Users` and removable drives via ReadDirectoryChangesW.
+ - Filters file events by extension (configurable) and logs events to `dlp_agent.log` and `dlp_agent.db` (SQLite).
++- Adds mid-level DLP checks: size thresholds, removable drive alerting, content keyword scanning, and optional SHA-256 hashing for small files.
++- Stores structured file/device events (policy decision + reason) in `events_v2` and `device_events` tables.
+ - Sends heartbeat POSTs to a configurable server URL with libcurl.
+ 
+ **Files of interest**
+-- [config.json](config.json) — runtime configuration (server_url, extension_filter, size_threshold, usb_allow_serials).
++- [config.json](config.json) — runtime configuration (server_url, extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable).
+ - [src/main.cpp](src/main.cpp) — program entry and worker threads startup.
+ - [src/file_watch.cpp](src/file_watch.cpp) — file watcher implementation using ReadDirectoryChangesW.
+ - [src/usb_scan.cpp](src/usb_scan.cpp) — USB / drive enumerator.
+ - [src/api.cpp](src/api.cpp) — simple libcurl-based API sender (heartbeat).
+ - [src/log.cpp](src/log.cpp), [src/sqlite_store.cpp](src/sqlite_store.cpp) — logging + SQLite storage.
+ - [load.py](load.py) — small Python helper to inspect `dlp_agent.db` (list tables, show recent rows, export CSV).
+ 
+ Build (MSYS2 UCRT64)
+ 
+ 1. Open MSYS2 UCRT64 shell.
+ 2. Install required packages if missing:
+ 
+ ```bash
+ pacman -Syu
+ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make \
+     mingw-w64-ucrt-x86_64-libcurl mingw-w64-ucrt-x86_64-sqlite3 \
+     mingw-w64-ucrt-x86_64-wbemidl mingw-w64-ucrt-x86_64-crypt32
+ ```
+ 
+ 3. Build:
+ 
+ ```bash
+ cd /d/proj/dlp_agent
+ make clean
+ make -j1
+@@ -41,50 +43,58 @@ Run
+ PowerShell (interactive):
+ 
+ ```powershell
+ .\dlp_agent.exe
+ # press 'q' then Enter to quit
+ ```
+ 
+ PowerShell (redirect output):
+ 
+ ```powershell
+ .\dlp_agent.exe *> run_all.txt
+ Get-Content run_all.txt -Wait
+ ```
+ 
+ Inspect database
+ 
+ ```bash
+ python load.py --db dlp_agent.db --list-tables
+ python load.py --db dlp_agent.db --table events --limit 50
+ ```
+ 
+ Configuration
+ 
+ Edit [config.json](config.json) to change `server_url`, `extension_filter` (e.g., add ".docx"), `size_threshold`, or USB allowlist.
+ 
++New mid-level DLP configuration keys:
++
++- `content_keywords`: case-insensitive keywords scanned from the first `max_scan_bytes` of matching files.
++- `max_scan_bytes`: maximum bytes to scan for keywords.
++- `hash_max_bytes`: maximum file size to hash (SHA-256).
++- `block_on_match`: if `true`, keyword hits are marked as `BLOCK` (otherwise `ALERT`).
++- `alert_on_removable`: if `true`, file events on removable drives are flagged.
++
+ Git / publish
+ 
+ Create a `.gitignore` (exclude build artifacts, logs, DB). Then commit and push to GitHub:
+ 
+ PowerShell (HTTPS):
+ 
+ ```powershell
+ git add .
+ git commit -m "Add README and project scaffold"
+ git branch -M main
+ git remote add origin https://github.com/<your-username>/<repo>.git   # if needed
+ git push -u origin main
+ ```
+ 
+ Using GitHub CLI (creates remote and pushes):
+ 
+ ```bash
+ gh auth login
+ gh repo create <your-username>/<repo> --public --source=. --remote=origin --push
+ ```
+ 
+ Notes
+ 
+ - The current implementation is a scaffold and intentionally minimal: production hardening, privileged service installation, robust error handling, and full WMI USB event parsing should be added before deployment.
+ - I cannot push to your GitHub from here; run the git commands above in your environment to publish.
+diff --git a/README_UZ.md b/README_UZ.md
+index 8aae96ec59fb77d26b96f67209143174b2eea2be..990c9b2299b3bbb3dc3cebd43c59221513744669 100644
+--- a/README_UZ.md
++++ b/README_UZ.md
+@@ -1,82 +1,92 @@
+ # dlp_agent — Oʻzbekcha hujjat
+ 
+ Ushbu repo Windows uchun minimal DLP (Data Loss Prevention) endpoint agentining C++ asosidagi shablonidir. Loyihani MSYS2 UCRT64 (g++) yordamida yig‘ish va ishga tushirish bo‘yicha ko‘rsatmalar quyida keltirilgan.
+ 
+ Asosiy imkoniyatlar
+ - USB qurilmalarni tekshirish (removable drayvlar)
+ - `C:\Users` va removable drayvlarda fayl faoliyatini `ReadDirectoryChangesW` orqali kuzatish
+ - Fayl voqealari `config.json` dagi `extension_filter` ga qarab filtrlash (masalan .txt, .log, .docx)
+ - Hodisalarni faylga va SQLite bazaga yozish (`dlp_agent.log`, `dlp_agent.db`)
+ - Libcurl yordamida serverga (konfiguratsiyaga ko‘ra) POST yuborish (heartbeat)
++- O‘rta darajali DLP tekshiruvlari: fayl hajmi bo‘yicha threshold, removable disklar uchun alert, kontent bo‘yicha keyword skan, kichik fayllar uchun SHA-256 hash
++- Strukturalangan fayl/qurilma voqealari `events_v2` va `device_events` jadvallarida saqlanadi
+ 
+ Fayllar va katalog
+-- `config.json` — ish vaqti konfiguratsiyasi (server_url, extension_filter, size_threshold, usb_allow_serials)
++- `config.json` — ish vaqti konfiguratsiyasi (server_url, extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable)
+ - `src/` — manba kodlari (main, usb_scan, file_watch, api, log, sqlite_store va boshqalar)
+ - `load.py` — `dlp_agent.db` faylini tekshirish uchun Python yordamchi (jadval ro‘yxati, so‘nggi satrlar, CSV eksport)
+ 
+ Qurish (MSYS2 UCRT64)
+ 
+ 1. MSYS2 UCRT64 shellini oching.
+ 2. Zarur paketlarni o‘rnating (agar yo‘q bo‘lsa):
+ 
+ ```bash
+ pacman -Syu
+ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make \
+     mingw-w64-ucrt-x86_64-libcurl mingw-w64-ucrt-x86_64-sqlite3
+ ```
+ 
+ 3. Loyihani yig‘ish:
+ 
+ ```bash
+ cd /d/proj/dlp_agent
+ make clean
+ make -j1
+ ```
+ 
+ Ishga tushirish
+ 
+ PowerShell (interaktiv):
+ 
+ ```powershell
+ .\dlp_agent.exe
+ # to'xtatmoqchi bo'lsangiz: 'q' ni bosing va Enter
+ ```
+ 
+ PowerShell (chiqishni faylga yo'naltirish):
+ 
+ ```powershell
+ .\dlp_agent.exe *> run_all.txt
+ Get-Content run_all.txt -Wait
+ ```
+ 
+ Bazani tekshirish (Python):
+ 
+ ```bash
+ python load.py --db dlp_agent.db --list-tables
+ python load.py --db dlp_agent.db --table events --limit 50
+ ```
+ 
+ Konfiguratsiya o‘zgartirish
+ 
+ `config.json` faylida `extension_filter` ro‘yxatini yangilang (masalan `".docx"` qo‘shish), `server_url` ni belgilang va agentni qayta ishga tushiring.
+ 
++O‘rta daraja DLP uchun yangi kalitlar:
++
++- `content_keywords`: `max_scan_bytes` ichida case-insensitive keyword qidirish.
++- `max_scan_bytes`: keyword skan qilish uchun maksimum bayt.
++- `hash_max_bytes`: SHA-256 hisoblash uchun maksimum fayl hajmi.
++- `block_on_match`: `true` bo‘lsa keyword topilganda `BLOCK` belgilanadi.
++- `alert_on_removable`: `true` bo‘lsa removable diskdagi voqealar flag qilinadi.
++
+ GitHub ga yuklash
+ 
+ ```powershell
+ git add .
+ git commit -m "Initial commit"
+ # agar origin noto'g'ri bo'lsa:
+ # git remote set-url origin https://github.com/<your-username>/<repo>.git
+ git push -u origin main
+ ```
+ 
+ Yoki `gh` CLI yordamida yangi repo yaratish va push:
+ 
+ ```bash
+ gh auth login
+ gh repo create <your-username>/<repo> --public --source=. --remote=origin --push
+ ```
+ 
+ Eslatmalar
+ - Hozirgi kod scaffold vazifasini bajaradi; ishlab chiqarish uchun qo‘shimcha xavfsizlik, xatoliklarni yaxshilash, service sifatida o‘rnatish va WMI asosida USB voqealarini aniq o‘qish kerak.
+ - Men GitHub ga push qila olmayman; sizning kompyuteringizda git/gh orqali push qiling.
+diff --git a/config.json b/config.json
+index c3a937509eecd445d067afd27412a99669427bf9..bfcba399045f490c8226b19c640d86d9be485d9e 100644
+--- a/config.json
++++ b/config.json
+@@ -1,6 +1,11 @@
+ {
+   "server_url": "http://localhost:8080/api/events",
+   "extension_filter": [".txt", ".log", ".docx"],
+   "size_threshold": 10485760,
+-  "usb_allow_serials": []
++  "usb_allow_serials": [],
++  "content_keywords": ["confidential", "secret", "personal data"],
++  "max_scan_bytes": 65536,
++  "hash_max_bytes": 1048576,
++  "block_on_match": false,
++  "alert_on_removable": true
+ }
+diff --git a/src/config.cpp b/src/config.cpp
+index 56afd8a3b9857ad268c6869aa470a81259d37b17..8ee3950a8e409aae70ffca0e3f1abad267cfc5e4 100644
+--- a/src/config.cpp
++++ b/src/config.cpp
+@@ -1,75 +1,104 @@
+ #include "config.h"
+ #include <fstream>
+ #include <algorithm>
++#include <cctype>
+ #include <sstream>
+ 
+ std::string g_server_url = "http://localhost:8080/api/events";
+ std::vector<std::string> g_extension_filter = {".txt", ".log"};
+ size_t g_size_threshold = 10 * 1024 * 1024;
+ std::vector<std::string> g_usb_allow_serials;
++std::vector<std::string> g_content_keywords = {"confidential", "secret"};
++size_t g_max_scan_bytes = 64 * 1024;
++size_t g_hash_max_bytes = 1024 * 1024;
++bool g_block_on_match = false;
++bool g_alert_on_removable = true;
+ 
+ std::atomic<bool> g_running{false};
+ 
+ static std::string extract_string(const std::string &s, const std::string &key) {
+     auto pos = s.find("\"" + key + "\"");
+     if (pos == std::string::npos) return "";
+     auto colon = s.find(':', pos);
+     if (colon == std::string::npos) return "";
+     auto first = s.find('"', colon+1);
+     if (first == std::string::npos) return "";
+     auto second = s.find('"', first+1);
+     if (second == std::string::npos) return "";
+     return s.substr(first+1, second-first-1);
+ }
+ 
+ static std::vector<std::string> extract_array(const std::string &s, const std::string &key) {
+     std::vector<std::string> out;
+     auto pos = s.find("\"" + key + "\"");
+     if (pos == std::string::npos) return out;
+     auto colon = s.find(':', pos);
+     if (colon == std::string::npos) return out;
+     auto lb = s.find('[', colon);
+     auto rb = s.find(']', lb);
+     if (lb==std::string::npos || rb==std::string::npos) return out;
+     std::string body = s.substr(lb+1, rb-lb-1);
+     std::istringstream iss(body);
+     std::string token;
+     while (std::getline(iss, token, ',')) {
+         auto first = token.find('"');
+         if (first==std::string::npos) continue;
+         auto second = token.find('"', first+1);
+         if (second==std::string::npos) continue;
+         out.push_back(token.substr(first+1, second-first-1));
+     }
+     return out;
+ }
+ 
++static bool extract_bool(const std::string &s, const std::string &key, bool default_value) {
++    auto pos = s.find("\"" + key + "\"");
++    if (pos == std::string::npos) return default_value;
++    auto colon = s.find(':', pos);
++    if (colon == std::string::npos) return default_value;
++    size_t i = colon + 1;
++    while (i < s.size() && isspace((unsigned char)s[i])) ++i;
++    if (s.compare(i, 4, "true") == 0) return true;
++    if (s.compare(i, 5, "false") == 0) return false;
++    return default_value;
++}
++
++static size_t extract_number(const std::string &s, const std::string &key, size_t default_value) {
++    auto pos = s.find("\"" + key + "\"");
++    if (pos == std::string::npos) return default_value;
++    auto colon = s.find(':', pos);
++    if (colon == std::string::npos) return default_value;
++    size_t i = colon + 1;
++    while (i < s.size() && isspace((unsigned char)s[i])) ++i;
++    size_t j = i;
++    while (j < s.size() && (isdigit((unsigned char)s[j]))) ++j;
++    if (j > i) {
++        return std::stoull(s.substr(i, j - i));
++    }
++    return default_value;
++}
++
+ bool load_config(const char *path) {
+     std::ifstream ifs(path);
+     if (!ifs) return false;
+     std::ostringstream oss;
+     oss << ifs.rdbuf();
+     std::string s = oss.str();
+ 
+     auto url = extract_string(s, "server_url");
+     if (!url.empty()) g_server_url = url;
+     auto exts = extract_array(s, "extension_filter");
+     if (!exts.empty()) g_extension_filter = exts;
+     auto serials = extract_array(s, "usb_allow_serials");
+     if (!serials.empty()) g_usb_allow_serials = serials;
++    auto keywords = extract_array(s, "content_keywords");
++    if (!keywords.empty()) g_content_keywords = keywords;
+ 
+     // size_threshold (number)
+-    auto pos = s.find("\"size_threshold\"");
+-    if (pos != std::string::npos) {
+-        auto colon = s.find(':', pos);
+-        if (colon != std::string::npos) {
+-            size_t i = colon+1;
+-            while (i<s.size() && isspace((unsigned char)s[i])) ++i;
+-            size_t j = i;
+-            while (j<s.size() && (isdigit((unsigned char)s[j]))) ++j;
+-            if (j>i) g_size_threshold = std::stoull(s.substr(i,j-i));
+-        }
+-    }
++    g_size_threshold = extract_number(s, "size_threshold", g_size_threshold);
++    g_max_scan_bytes = extract_number(s, "max_scan_bytes", g_max_scan_bytes);
++    g_hash_max_bytes = extract_number(s, "hash_max_bytes", g_hash_max_bytes);
++    g_block_on_match = extract_bool(s, "block_on_match", g_block_on_match);
++    g_alert_on_removable = extract_bool(s, "alert_on_removable", g_alert_on_removable);
+ 
+     return true;
+ }
+diff --git a/src/config.h b/src/config.h
+index 14170e4806e6c38bbe49e8cb62f29dc1bbb18919..28db93421b6b20634c9f948bdab957c329aac797 100644
+--- a/src/config.h
++++ b/src/config.h
+@@ -1,13 +1,18 @@
+ #pragma once
+ #include <string>
+ #include <vector>
+ #include <atomic>
+ 
+ extern std::string g_server_url;
+ extern std::vector<std::string> g_extension_filter;
+ extern size_t g_size_threshold;
+ extern std::vector<std::string> g_usb_allow_serials;
++extern std::vector<std::string> g_content_keywords;
++extern size_t g_max_scan_bytes;
++extern size_t g_hash_max_bytes;
++extern bool g_block_on_match;
++extern bool g_alert_on_removable;
+ 
+ extern std::atomic<bool> g_running;
+ 
+ bool load_config(const char *path);
+diff --git a/src/event_bus.cpp b/src/event_bus.cpp
+index 18131906cfb57d2d241232f12ae711f21c37f100..b87281db08a17275d1100371fdd03883360556c5 100644
+--- a/src/event_bus.cpp
++++ b/src/event_bus.cpp
+@@ -1,8 +1,56 @@
+ #include "event_bus.h"
+ #include "sqlite_store.h"
+ #include "log.h"
++#include <sstream>
++
++static std::string json_escape(const std::string &s) {
++    std::string out;
++    out.reserve(s.size() + 8);
++    for (char c : s) {
++        switch (c) {
++            case '\\': out += "\\\\"; break;
++            case '"': out += "\\\""; break;
++            case '\n': out += "\\n"; break;
++            case '\r': out += "\\r"; break;
++            case '\t': out += "\\t"; break;
++            default: out += c; break;
++        }
++    }
++    return out;
++}
+ 
+ void emit_event(const std::string &ev) {
+     log_info("event: %s", ev.c_str());
+     sqlite_insert_event(ev);
+ }
++
++void emit_file_event(const FileEvent &ev) {
++    std::ostringstream oss;
++    oss << "{"
++        << "\"type\":\"" << json_escape(ev.event_type) << "\","
++        << "\"action\":\"" << json_escape(ev.action) << "\","
++        << "\"path\":\"" << json_escape(ev.path) << "\","
++        << "\"user\":\"" << json_escape(ev.user) << "\","
++        << "\"drive_type\":\"" << json_escape(ev.drive_type) << "\","
++        << "\"size_bytes\":" << ev.size_bytes << ","
++        << "\"sha256\":\"" << json_escape(ev.sha256) << "\","
++        << "\"decision\":\"" << json_escape(ev.decision) << "\","
++        << "\"reason\":\"" << json_escape(ev.reason) << "\""
++        << "}";
++    log_info("file_event: %s", oss.str().c_str());
++    sqlite_insert_file_event(ev);
++    sqlite_insert_event(oss.str());
++}
++
++void emit_device_event(const DeviceEvent &ev) {
++    std::ostringstream oss;
++    oss << "{"
++        << "\"type\":\"device\","
++        << "\"drive\":\"" << json_escape(ev.drive_letter) << "\","
++        << "\"serial\":\"" << json_escape(ev.serial) << "\","
++        << "\"allowed\":" << (ev.allowed ? "true" : "false")
++        << "}";
++    log_info("device_event: %s", oss.str().c_str());
++    sqlite_insert_device_event(ev.drive_letter, ev.serial, ev.allowed);
++    sqlite_insert_event(oss.str());
++}
+diff --git a/src/event_bus.h b/src/event_bus.h
+index d29dc1a527b7a6da83cb59848bd1f0fd15d13da9..8aefdbc5e6be57171cdea5b539fc82525d4e5057 100644
+--- a/src/event_bus.h
++++ b/src/event_bus.h
+@@ -1,3 +1,25 @@
+ #pragma once
++#include <cstddef>
+ #include <string>
++
++struct FileEvent {
++    std::string event_type;
++    std::string action;
++    std::string path;
++    std::string user;
++    std::string drive_type;
++    size_t size_bytes = 0;
++    std::string sha256;
++    std::string decision;
++    std::string reason;
++};
++
++struct DeviceEvent {
++    std::string drive_letter;
++    std::string serial;
++    bool allowed = false;
++};
++
+ void emit_event(const std::string &ev);
++void emit_file_event(const FileEvent &ev);
++void emit_device_event(const DeviceEvent &ev);
+diff --git a/src/file_watch.cpp b/src/file_watch.cpp
+index 68ad1bb9103ee0468bca02b3e6278b2eba0e0d7e..887f543f0275298bc4599ba4505ad01b532f9077 100644
+--- a/src/file_watch.cpp
++++ b/src/file_watch.cpp
+@@ -1,74 +1,205 @@
+ #include "file_watch.h"
+ #include "log.h"
+ #include "config.h"
+ #include "sqlite_store.h"
+ #include "filter.h"
+ #include "event_bus.h"
++#include "hash.h"
++#include "policy.h"
+ 
+ #include <windows.h>
+ #include <string>
+ #include <thread>
+ #include <vector>
+ #include <sstream>
++#include <algorithm>
++#include <cctype>
+ 
+ static std::string wc_to_utf8(const wchar_t *w, int len) {
+     if (!w) return std::string();
+     int needed = WideCharToMultiByte(CP_UTF8, 0, w, len, NULL, 0, NULL, NULL);
+     if (needed <= 0) return std::string();
+     std::string out(needed, '\0');
+     WideCharToMultiByte(CP_UTF8, 0, w, len, &out[0], needed, NULL, NULL);
+     return out;
+ }
+ 
++static std::string to_lower_str_fw(const std::string &s) {
++    std::string out = s;
++    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c){ return std::tolower(c); });
++    return out;
++}
++
++static std::string get_username() {
++    char buf[256];
++    DWORD len = sizeof(buf);
++    if (GetUserNameA(buf, &len)) {
++        if (len > 0 && buf[len - 1] == '\0') {
++            return std::string(buf);
++        }
++        return std::string(buf, len);
++    }
++    return "unknown";
++}
++
++static std::string drive_type_for_path(const std::string &path) {
++    if (path.size() < 3 || path[1] != ':' || path[2] != '\\') return "UNKNOWN";
++    char root[4] = { path[0], ':', '\\', '\0' };
++    UINT type = GetDriveTypeA(root);
++    switch (type) {
++        case DRIVE_REMOVABLE: return "REMOVABLE";
++        case DRIVE_FIXED: return "FIXED";
++        case DRIVE_REMOTE: return "REMOTE";
++        case DRIVE_CDROM: return "CDROM";
++        case DRIVE_RAMDISK: return "RAMDISK";
++        default: return "UNKNOWN";
++    }
++}
++
++static bool read_file_bytes(const std::string &path, size_t max_bytes, std::vector<unsigned char> &out, size_t &size_out) {
++    HANDLE hFile = CreateFileA(
++        path.c_str(),
++        GENERIC_READ,
++        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
++        NULL,
++        OPEN_EXISTING,
++        FILE_ATTRIBUTE_NORMAL,
++        NULL);
++    if (hFile == INVALID_HANDLE_VALUE) return false;
++    LARGE_INTEGER file_size;
++    if (!GetFileSizeEx(hFile, &file_size)) {
++        CloseHandle(hFile);
++        return false;
++    }
++    size_out = static_cast<size_t>(file_size.QuadPart);
++    size_t to_read = size_out < max_bytes ? size_out : max_bytes;
++    out.resize(to_read);
++    DWORD read = 0;
++    BOOL ok = ReadFile(hFile, out.data(), static_cast<DWORD>(to_read), &read, NULL);
++    CloseHandle(hFile);
++    if (!ok) return false;
++    out.resize(read);
++    return true;
++}
++
++static std::string hash_file_if_small(const std::string &path, size_t max_bytes) {
++    HANDLE hFile = CreateFileA(
++        path.c_str(),
++        GENERIC_READ,
++        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
++        NULL,
++        OPEN_EXISTING,
++        FILE_ATTRIBUTE_NORMAL,
++        NULL);
++    if (hFile == INVALID_HANDLE_VALUE) return std::string();
++    LARGE_INTEGER file_size;
++    if (!GetFileSizeEx(hFile, &file_size)) {
++        CloseHandle(hFile);
++        return std::string();
++    }
++    size_t size = static_cast<size_t>(file_size.QuadPart);
++    if (size > max_bytes) {
++        CloseHandle(hFile);
++        return std::string();
++    }
++    std::vector<unsigned char> buf(size);
++    DWORD read = 0;
++    BOOL ok = ReadFile(hFile, buf.data(), static_cast<DWORD>(size), &read, NULL);
++    CloseHandle(hFile);
++    if (!ok || read != size) return std::string();
++    return sha256_hex(buf.data(), buf.size());
++}
++
++static bool keyword_hit(const std::vector<unsigned char> &data) {
++    if (g_content_keywords.empty()) return false;
++    std::string hay(reinterpret_cast<const char*>(data.data()), data.size());
++    hay = to_lower_str_fw(hay);
++    for (const auto &kw : g_content_keywords) {
++        std::string needle = to_lower_str_fw(kw);
++        if (!needle.empty() && hay.find(needle) != std::string::npos) return true;
++    }
++    return false;
++}
++
+ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &basepath) {
+     FILE_NOTIFY_INFORMATION *fni = (FILE_NOTIFY_INFORMATION*)buf;
+     while (true) {
+         int nameLen = fni->FileNameLength / sizeof(wchar_t);
+         std::string name = wc_to_utf8(fni->FileName, nameLen);
+         std::string fullpath;
+         if (!basepath.empty()) {
+             fullpath = basepath + "\\" + name;
+         } else fullpath = name;
+ 
+         // ignore temporary Office lockfiles starting with ~$ and .tmp
+         if (!name.empty()) {
+             if (name.rfind("~$", 0) == 0) goto next_item;
+         }
+         // extension filter
+         if (extension_allowed(name)) {
+             const char *action = "UNKNOWN";
+             switch (fni->Action) {
+                 case FILE_ACTION_ADDED: action = "ADDED"; break;
+                 case FILE_ACTION_REMOVED: action = "REMOVED"; break;
+                 case FILE_ACTION_MODIFIED: action = "MODIFIED"; break;
+                 case FILE_ACTION_RENAMED_OLD_NAME: action = "RENAMED_FROM"; break;
+                 case FILE_ACTION_RENAMED_NEW_NAME: action = "RENAMED_TO"; break;
+             }
+-            std::ostringstream oss;
+-            oss << "file_event:" << action << ":" << fullpath;
+-            emit_event(oss.str());
++
++            FileEvent ev;
++            ev.event_type = "file";
++            ev.action = action;
++            ev.path = fullpath;
++            ev.user = get_username();
++            ev.drive_type = drive_type_for_path(fullpath);
++            ev.size_bytes = 0;
++
++            bool size_exceeded = false;
++            bool keyword_found = false;
++            bool is_removable = (ev.drive_type == "REMOVABLE");
++
++            if (fni->Action != FILE_ACTION_REMOVED && fni->Action != FILE_ACTION_RENAMED_OLD_NAME) {
++                std::vector<unsigned char> data;
++                size_t file_size = 0;
++                if (read_file_bytes(fullpath, g_max_scan_bytes, data, file_size)) {
++                    ev.size_bytes = file_size;
++                    size_exceeded = (file_size >= g_size_threshold);
++                    keyword_found = keyword_hit(data);
++                    ev.sha256 = hash_file_if_small(fullpath, g_hash_max_bytes);
++                }
++            }
++
++            PolicyDecision decision = evaluate_file_policy(
++                size_exceeded,
++                keyword_found,
++                is_removable,
++                g_block_on_match,
++                g_alert_on_removable);
++            ev.decision = decision.decision;
++            ev.reason = decision.reason;
++            emit_file_event(ev);
+         }
+ next_item:
+         if (fni->NextEntryOffset == 0) break;
+         fni = (FILE_NOTIFY_INFORMATION*)(((BYTE*)fni) + fni->NextEntryOffset);
+     }
+ }
+ 
+ static void watch_path_thread(const std::string &path) {
+     std::wstring wpath;
+     int n = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, NULL, 0);
+     wpath.resize(n);
+     MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, &wpath[0], n);
+ 
+     HANDLE hDir = CreateFileW(wpath.c_str(), FILE_LIST_DIRECTORY,
+         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+         NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+     if (hDir == INVALID_HANDLE_VALUE) {
+         log_error("Failed to open watch path %s", path.c_str());
+         return;
+     }
+     const DWORD bufSize = 64*1024;
+     std::vector<BYTE> buf(bufSize);
+     DWORD bytes = 0;
+     while (g_running) {
+         BOOL ok = ReadDirectoryChangesW(hDir, buf.data(), bufSize, TRUE,
+diff --git a/src/policy.cpp b/src/policy.cpp
+index c1364e6329220f8e10b63cae302bf60d4d8dd0fe..b60b1337240611ae3a02ec281314e4f3bd324310 100644
+--- a/src/policy.cpp
++++ b/src/policy.cpp
+@@ -1,18 +1,47 @@
+ #include "policy.h"
+ #include "config.h"
+ #include <algorithm>
+ #include <cctype>
+ 
+ static std::string to_lower_str_pol(const std::string &s) {
+     std::string out = s;
+     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c){ return std::tolower(c); });
+     return out;
+ }
+ 
+ bool is_usb_allowed(const std::string &serial) {
+     std::string ser_l = to_lower_str_pol(serial);
+     for (auto &s : g_usb_allow_serials) {
+         if (to_lower_str_pol(s) == ser_l) return true;
+     }
+     return false;
+ }
++
++PolicyDecision evaluate_file_policy(bool size_exceeded,
++                                    bool keyword_hit,
++                                    bool removable_drive,
++                                    bool block_on_match,
++                                    bool alert_on_removable) {
++    PolicyDecision out;
++    std::vector<std::string> reasons;
++    if (size_exceeded) reasons.push_back("size_threshold");
++    if (keyword_hit) reasons.push_back("content_keyword");
++    if (removable_drive && alert_on_removable) reasons.push_back("removable_drive");
++
++    if (!reasons.empty()) {
++        out.reason.clear();
++        for (size_t i = 0; i < reasons.size(); ++i) {
++            if (i) out.reason += ",";
++            out.reason += reasons[i];
++        }
++        if (keyword_hit && block_on_match) {
++            out.decision = "BLOCK";
++        } else {
++            out.decision = "ALERT";
++        }
++    } else {
++        out.decision = "ALLOW";
++        out.reason = "policy_ok";
++    }
++    return out;
++}
+diff --git a/src/policy.h b/src/policy.h
+index 7dab4ae5a63f67fe480405ec23f6fe075c5be675..b2f5fde8807f6632b498bd4722a3130dbd282d95 100644
+--- a/src/policy.h
++++ b/src/policy.h
+@@ -1,3 +1,14 @@
+ #pragma once
+ #include <string>
++
++struct PolicyDecision {
++    std::string decision;
++    std::string reason;
++};
++
+ bool is_usb_allowed(const std::string &serial);
++PolicyDecision evaluate_file_policy(bool size_exceeded,
++                                    bool keyword_hit,
++                                    bool removable_drive,
++                                    bool block_on_match,
++                                    bool alert_on_removable);
+diff --git a/src/sqlite_store.cpp b/src/sqlite_store.cpp
+index 9f8d998b7aa055df040d027c85d1fc40e7bd5a41..5785dbf46d67a6141497925f04dde5764a418db9 100644
+--- a/src/sqlite_store.cpp
++++ b/src/sqlite_store.cpp
+@@ -1,42 +1,104 @@
+ #include "sqlite_store.h"
++#include "event_bus.h"
+ #include <sqlite3.h>
+ #include <mutex>
+ 
+ static sqlite3 *g_db = nullptr;
+ static std::mutex g_db_mtx;
+ 
+ bool sqlite_init(const char *path) {
+     std::lock_guard<std::mutex> lk(g_db_mtx);
+     if (sqlite3_open(path, &g_db) != SQLITE_OK) return false;
+     const char *schema =
+         "CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, data TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP);"
+-        "CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, ts TEXT, level TEXT, msg TEXT);";
++        "CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, ts TEXT, level TEXT, msg TEXT);"
++        "CREATE TABLE IF NOT EXISTS events_v2("
++        "id INTEGER PRIMARY KEY,"
++        "ts DATETIME DEFAULT CURRENT_TIMESTAMP,"
++        "event_type TEXT,"
++        "action TEXT,"
++        "path TEXT,"
++        "user TEXT,"
++        "drive_type TEXT,"
++        "size_bytes INTEGER,"
++        "sha256 TEXT,"
++        "decision TEXT,"
++        "reason TEXT);"
++        "CREATE TABLE IF NOT EXISTS device_events("
++        "id INTEGER PRIMARY KEY,"
++        "ts DATETIME DEFAULT CURRENT_TIMESTAMP,"
++        "drive TEXT,"
++        "serial TEXT,"
++        "allowed INTEGER);";
+     char *err = nullptr;
+     sqlite3_exec(g_db, schema, nullptr, nullptr, &err);
+     if (err) { sqlite3_free(err); }
+     return true;
+ }
+ 
+ void sqlite_insert_event(const std::string &ev) {
+     std::lock_guard<std::mutex> lk(g_db_mtx);
+     if (!g_db) return;
+     sqlite3_stmt *st = nullptr;
+     sqlite3_prepare_v2(g_db, "INSERT INTO events(data) VALUES(?);", -1, &st, nullptr);
+     if (!st) return;
+     sqlite3_bind_text(st, 1, ev.c_str(), -1, SQLITE_TRANSIENT);
+     sqlite3_step(st);
+     sqlite3_finalize(st);
+ }
+ 
+ void sqlite_insert_log(const char *ts, const char *level, const char *msg) {
+     std::lock_guard<std::mutex> lk(g_db_mtx);
+     if (!g_db) return;
+     sqlite3_stmt *st = nullptr;
+     sqlite3_prepare_v2(g_db, "INSERT INTO logs(ts, level, msg) VALUES(?, ?, ?);", -1, &st, nullptr);
+     if (!st) return;
+     sqlite3_bind_text(st, 1, ts, -1, SQLITE_TRANSIENT);
+     sqlite3_bind_text(st, 2, level, -1, SQLITE_TRANSIENT);
+     sqlite3_bind_text(st, 3, msg, -1, SQLITE_TRANSIENT);
+     sqlite3_step(st);
+     sqlite3_finalize(st);
+ }
++
++void sqlite_insert_file_event(const FileEvent &ev) {
++    std::lock_guard<std::mutex> lk(g_db_mtx);
++    if (!g_db) return;
++    sqlite3_stmt *st = nullptr;
++    sqlite3_prepare_v2(
++        g_db,
++        "INSERT INTO events_v2(event_type, action, path, user, drive_type, size_bytes, sha256, decision, reason) "
++        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);",
++        -1,
++        &st,
++        nullptr);
++    if (!st) return;
++    sqlite3_bind_text(st, 1, ev.event_type.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_text(st, 2, ev.action.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_text(st, 3, ev.path.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_text(st, 4, ev.user.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_text(st, 5, ev.drive_type.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_int64(st, 6, static_cast<sqlite3_int64>(ev.size_bytes));
++    sqlite3_bind_text(st, 7, ev.sha256.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_text(st, 8, ev.decision.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_text(st, 9, ev.reason.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_step(st);
++    sqlite3_finalize(st);
++}
++
++void sqlite_insert_device_event(const std::string &drive, const std::string &serial, bool allowed) {
++    std::lock_guard<std::mutex> lk(g_db_mtx);
++    if (!g_db) return;
++    sqlite3_stmt *st = nullptr;
++    sqlite3_prepare_v2(
++        g_db,
++        "INSERT INTO device_events(drive, serial, allowed) VALUES(?, ?, ?);",
++        -1,
++        &st,
++        nullptr);
++    if (!st) return;
++    sqlite3_bind_text(st, 1, drive.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_text(st, 2, serial.c_str(), -1, SQLITE_TRANSIENT);
++    sqlite3_bind_int(st, 3, allowed ? 1 : 0);
++    sqlite3_step(st);
++    sqlite3_finalize(st);
++}
+diff --git a/src/sqlite_store.h b/src/sqlite_store.h
+index bb7d54bb4ea16946e35a1c645472beccd408a449..def8cf404e0d5f4602d7b87459d91f88363063ec 100644
+--- a/src/sqlite_store.h
++++ b/src/sqlite_store.h
+@@ -1,6 +1,10 @@
+ #pragma once
+ #include <string>
+ 
++struct FileEvent;
++
+ bool sqlite_init(const char *path);
+ void sqlite_insert_event(const std::string &ev);
+ void sqlite_insert_log(const char *ts, const char *level, const char *msg);
++void sqlite_insert_file_event(const struct FileEvent &ev);
++void sqlite_insert_device_event(const std::string &drive, const std::string &serial, bool allowed);
+diff --git a/src/usb_scan.cpp b/src/usb_scan.cpp
+index 4fcd4ee4cd0f0c3b664c4b9c71b6952a78e02677..c6c3111b1f2a93714b65096173ddc8ec883e25d3 100644
+--- a/src/usb_scan.cpp
++++ b/src/usb_scan.cpp
+@@ -1,41 +1,46 @@
+ #include "usb_scan.h"
+ #include "log.h"
+ #include "sqlite_store.h"
++#include "event_bus.h"
++#include "policy.h"
+ 
+ #include <windows.h>
+ #include "config.h"
+ #include <string>
+ #include <thread>
+ #include <vector>
+ 
+ static std::string get_volume_serial(char drive) {
+     char root[4] = { (char)drive, ':', '\\', '\0' };
+     DWORD volser = 0;
+         if (GetVolumeInformationA(root, nullptr, 0, &volser, nullptr, nullptr, nullptr, 0)) {
+         char buf[32];
+         snprintf(buf, sizeof(buf), "%08lX", (unsigned long)volser);
+         return std::string(buf);
+     }
+     return std::string();
+ }
+ 
+ void usb_scan_thread() {
+     log_info("USB scan thread started");
+     std::vector<std::string> seen;
+     while (g_running) {
+         DWORD mask = GetLogicalDrives();
+         for (int i=0;i<26;i++) {
+             if (mask & (1<<i)) {
+                 char drv = 'A' + i;
+                 char root[4] = { drv, ':', '\\', '\0' };
+                 UINT type = GetDriveTypeA(root);
+-                if (type == DRIVE_REMOVABLE || type == DRIVE_FIXED) {
++                if (type == DRIVE_REMOVABLE) {
+                     std::string serial = get_volume_serial(drv);
+-                    std::string ev = "device:" + std::string(1,drv) + " serial=" + serial;
+-                    sqlite_insert_event(ev);
++                    DeviceEvent ev;
++                    ev.drive_letter = std::string(1, drv);
++                    ev.serial = serial;
++                    ev.allowed = serial.empty() ? false : is_usb_allowed(serial);
++                    emit_device_event(ev);
+                 }
+             }
+         }
+         std::this_thread::sleep_for(std::chrono::seconds(10));
+     }
+ }
