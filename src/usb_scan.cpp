@@ -8,6 +8,7 @@
 #include "config.h"
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 static std::string get_volume_serial(char drive) {
@@ -23,8 +24,9 @@ static std::string get_volume_serial(char drive) {
 
 void usb_scan_thread() {
     log_info("USB scan thread started");
-    std::vector<std::string> seen;
+    std::unordered_map<char, std::pair<std::string, bool>> last_seen;
     while (g_running) {
+        std::unordered_map<char, std::pair<std::string, bool>> current_seen;
         DWORD mask = GetLogicalDrives();
         for (int i=0;i<26;i++) {
             if (mask & (1<<i)) {
@@ -37,10 +39,15 @@ void usb_scan_thread() {
                     ev.drive_letter = std::string(1, drv);
                     ev.serial = serial;
                     ev.allowed = serial.empty() ? false : is_usb_allowed(serial);
-                    emit_device_event(ev);
+                    current_seen[drv] = {serial, ev.allowed};
+                    auto it = last_seen.find(drv);
+                    if (it == last_seen.end() || it->second.first != serial || it->second.second != ev.allowed) {
+                        emit_device_event(ev);
+                    }
                 }
             }
         }
+        last_seen.swap(current_seen);
         std::this_thread::sleep_for(std::chrono::seconds(10));
     }
 }
