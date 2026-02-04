@@ -1,0 +1,21 @@
+{
+  "policy": {
+    "name": "default",
+    "version": 1,
+    "description": "Baseline DLP policy mapping to enterprise rule packs."
+  },
+  "rule_packs": [
+    "pii_rules.json",
+    "secret_rules.json",
+    "compliance_rules.json"
+  ],
+  "rules": [
+    {
+      "id": "default-001",
+      "name": "Baseline allow",
+      "type": "allow",
+      "priority": 999,
+      "severity": 1
+    }
+  ]
+}

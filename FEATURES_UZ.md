@@ -7,12 +7,12 @@
 ### 1) USB qurilmalarni kuzatish
 - Logical drive va removable qurilmalarni aniqlaydi.
 - Volume identifikatorlari (serial ma’lumotlari) va qurilma hodisalarini qayd etadi.
-- `config.json` orqali USB serial allowlist siyosatini qo‘llaydi.
+- `agent/config/agent_config.json` orqali USB serial allowlist siyosatini qo‘llaydi.
 
 ### 2) Fayl faoliyatini kuzatish
 - `ReadDirectoryChangesW` orqali `C:\Users` va removable drayvlarni kuzatadi.
 - Yaratish/yozish/o‘chirish/nomini o‘zgartirish hodisalarini yuboradi.
-- `config.json` dagi `extension_filter` bo‘yicha filtrlash (harf kattaligi sezilmaydi).
+- `agent/config/agent_config.json` dagi `extension_filter` bo‘yicha filtrlash (harf kattaligi sezilmaydi).
 - Vaqtinchalik fayllar va Office lock fayllari (`~$` prefiksi) e’tiborsiz qoldiriladi.
 
 ### 3) Siyosat tekshiruvlari
@@ -34,7 +34,7 @@
 - Qayta urinishga yaroqli xatoliklar lokal logga yoziladi.
 
 ## Konfiguratsiya
-Agentning asosiy xatti-harakati `config.json` orqali boshqariladi:
+Agentning asosiy xatti-harakati `agent/config/agent_config.json` orqali boshqariladi:
 - `telemetry_endpoint` — telemetriya paketlari uchun API endpoint.
 - `extension_filter` — kuzatiladigan fayl kengaytmalari ro‘yxati (masalan, [".txt", ".docx"]).
 - `size_threshold` — fayl hajmi bo‘yicha chegaralash (baytlarda).
@@ -48,6 +48,6 @@ Agentning asosiy xatti-harakati `config.json` orqali boshqariladi:
 - Qo‘shimcha xavfsizliksiz SYSTEM huquqlarida ishga tushirmaslik tavsiya etiladi.
 
 ## Qayerda sozlash mumkin
-- `config.json` — siyosat filtrlari va server endpointlari.
-- `src/file_watch.cpp` va `src/usb_scan.cpp` — kuzatuvchi va enumerator logikasi.
-- `rules.json` — policy qoidalari uchun namunalar.
+- `agent/config/agent_config.json` — siyosat filtrlari va server endpointlari.
+- `agent/src/file_watch.cpp` va `agent/src/usb_scan.cpp` — kuzatuvchi va enumerator logikasi.
+- `/rules/*.json` — policy qoidalari uchun namunalar.

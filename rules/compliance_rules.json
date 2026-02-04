@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "id": "compliance-hash-001",
+      "name": "Known sensitive hash",
+      "type": "hash",
+      "hashes": ["e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"],
+      "priority": 9,
+      "severity": 5
+    }
+  ]
+}

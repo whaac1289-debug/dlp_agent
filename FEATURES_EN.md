@@ -7,12 +7,12 @@
 ### 1) USB device monitoring
 - Enumerates logical drives and removable devices.
 - Captures volume identifiers (including serial information) and device events.
-- Enforces a USB serial allowlist via `config.json`.
+- Enforces a USB serial allowlist via `agent/config/agent_config.json`.
 
 ### 2) File activity monitoring
 - Uses `ReadDirectoryChangesW` to watch `C:\Users` and removable drives.
 - Emits create/write/delete/rename events.
-- Filters by `extension_filter` from `config.json` (case-insensitive).
+- Filters by `extension_filter` from `agent/config/agent_config.json` (case-insensitive).
 - Ignores common temporary files and Office lock files (prefix `~$`).
 
 ### 3) Policy checks
@@ -34,7 +34,7 @@
 - Logs retryable failures locally for troubleshooting.
 
 ## Configuration surface
-The agent behavior is primarily controlled via `config.json`:
+The agent behavior is primarily controlled via `agent/config/agent_config.json`:
 - `telemetry_endpoint` — API endpoint for secure telemetry batches.
 - `extension_filter` — array of file extensions to monitor (e.g., [".txt", ".docx"]).
 - `size_threshold` — numeric size filter (bytes).
@@ -48,6 +48,6 @@ The agent behavior is primarily controlled via `config.json`:
 - Avoid running as SYSTEM without additional hardening and auditing.
 
 ## Where to customize
-- `config.json` for policy filters and server endpoints.
-- `src/file_watch.cpp` and `src/usb_scan.cpp` for watcher/enumerator logic.
-- `rules.json` for example policy rules.
+- `agent/config/agent_config.json` for policy filters and server endpoints.
+- `agent/src/file_watch.cpp` and `agent/src/usb_scan.cpp` for watcher/enumerator logic.
+- `/rules/*.json` for example policy rules.

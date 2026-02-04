@@ -11,13 +11,13 @@
 - **Telemetriya**: libcurl orqali sozlanadigan server URL ga heartbeat POST yuboriladi.
 
 ## Fayllar va kataloglar
-- `config.json` — runtime konfiguratsiya (extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable, rules_config, national_id_patterns, telemetry_* va policy_* maydonlari).
-- `rules.json` — rule engine uchun namunaviy qoidalar (regex/keyword/hash).
-- `src/main.cpp` — kirish nuqtasi va worker thread’lar.
-- `src/file_watch.cpp` — ReadDirectoryChangesW asosidagi file watcher.
-- `src/usb_scan.cpp` — USB/drive enumerator.
-- `src/api.cpp` — libcurl asosidagi API (heartbeat) yuborish.
-- `src/log.cpp`, `src/sqlite_store.cpp` — loglash va SQLite saqlash.
+- `agent/config/agent_config.json` — runtime konfiguratsiya (extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable, rules_config, national_id_patterns, telemetry_* va policy_* maydonlari).
+- `/rules/*.json` — rule engine uchun namunaviy qoidalar (regex/keyword/hash).
+- `agent/src/main.cpp` — kirish nuqtasi va worker thread’lar.
+- `agent/src/file_watch.cpp` — ReadDirectoryChangesW asosidagi file watcher.
+- `agent/src/usb_scan.cpp` — USB/drive enumerator.
+- `agent/src/api.cpp` — libcurl asosidagi API (heartbeat) yuborish.
+- `agent/src/log.cpp`, `agent/src/sqlite_store.cpp` — loglash va SQLite saqlash.
 - `load.py` — `dlp_agent.db` ni ko‘rish/eksport qilish uchun Python yordamchi.
 
 ## Qurish (MSYS2 UCRT64)
@@ -57,7 +57,7 @@ Get-Content run_all.txt -Wait
 ```
 
 ## Konfiguratsiya
-`config.json` faylida `extension_filter`, `size_threshold` va USB allowlist’ni yangilang. Qo‘shimcha DLP nazoratlari:
+`agent/config/agent_config.json` faylida `extension_filter`, `size_threshold` va USB allowlist’ni yangilang. Qo‘shimcha DLP nazoratlari:
 
 - `content_keywords`: `max_scan_bytes` ichida case-insensitive keyword qidirish.
 - `max_scan_bytes`: keyword skan qilish uchun maksimum bayt.
