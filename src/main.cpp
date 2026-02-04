@@ -5,6 +5,7 @@
 #include "file_watch.h"
 #include "api.h"
 #include "sqlite_store.h"
+#include "rule_engine.h"
 
 #include <thread>
 #include <vector>
@@ -24,6 +25,10 @@ int main() {
         log_error("Failed to initialize sqlite database");
         log_shutdown();
         return 1;
+    }
+
+    if (!g_rule_engine.load_from_file(g_rules_path)) {
+        log_error("Failed to load rules config");
     }
 
     // Start worker threads

@@ -6,11 +6,14 @@ Minimal Windows DLP endpoint agent scaffold (C++, MSYS2 UCRT64). This repository
 - Watches file activity under `C:\Users` and removable drives via ReadDirectoryChangesW.
 - Filters file events by extension (configurable) and logs events to `dlp_agent.log` and `dlp_agent.db` (SQLite).
 - Adds mid-level DLP checks: size thresholds, removable drive alerting, content keyword scanning, and optional SHA-256 hashing for small files.
+- Adds a modular rule engine (regex, keyword, hash) plus PII detectors (email, phone, passport/ID, credit card, IBAN, configurable national IDs).
+- Stores file fingerprints (full + partial hashes) to detect repeat content across files.
 - Stores structured file/device events (policy decision + reason) in `events_v2` and `device_events` tables.
 - Sends heartbeat POSTs to a configurable server URL with libcurl.
 
 **Files of interest**
 - [config.json](config.json) — runtime configuration (server_url, extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable).
+- [rules.json](rules.json) — example rule pack for the rule engine (regex/keyword/hash rules).
 - [src/main.cpp](src/main.cpp) — program entry and worker threads startup.
 - [src/file_watch.cpp](src/file_watch.cpp) — file watcher implementation using ReadDirectoryChangesW.
 - [src/usb_scan.cpp](src/usb_scan.cpp) — USB / drive enumerator.
@@ -65,3 +68,5 @@ New mid-level DLP configuration keys:
 - `hash_max_bytes`: maximum file size to hash (SHA-256).
 - `block_on_match`: if `true`, keyword hits are marked as `BLOCK` (otherwise `ALERT`).
 - `alert_on_removable`: if `true`, file events on removable drives are flagged.
+- `rules_config`: path to a JSON/YAML rule file for the rule engine.
+- `national_id_patterns`: regex patterns for national IDs (used by PII detector).

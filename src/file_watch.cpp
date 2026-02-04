@@ -6,6 +6,9 @@
 #include "event_bus.h"
 #include "hash.h"
 #include "policy.h"
+#include "rule_engine.h"
+#include "pii_detector.h"
+#include "fingerprint.h"
 
 #include <windows.h>
 #include <string>
@@ -134,6 +137,51 @@ static bool keyword_hit(const std::vector<unsigned char> &data) {
     return false;
 }
 
+static std::string summarize_rule_hits(const std::vector<RuleMatch> &hits) {
+    if (hits.empty()) return std::string();
+    std::ostringstream oss;
+    oss << "rule_hits=" << hits.size();
+    size_t limit = 3;
+    size_t count = 0;
+    for (const auto &hit : hits) {
+        if (count == 0) oss << " [";
+        if (count >= limit) break;
+        if (count > 0) oss << ", ";
+        oss << (hit.rule_name.empty() ? hit.rule_id : hit.rule_name);
+        oss << ":sev" << hit.severity;
+        oss << ":conf" << hit.confidence;
+        count++;
+    }
+    if (count > 0) oss << "]";
+    return oss.str();
+}
+
+static std::string summarize_pii_hits(const std::vector<PiiDetection> &hits) {
+    if (hits.empty()) return std::string();
+    std::ostringstream oss;
+    oss << "pii_hits=" << hits.size();
+    size_t limit = 3;
+    size_t count = 0;
+    for (const auto &hit : hits) {
+        if (count == 0) oss << " [";
+        if (count >= limit) break;
+        if (count > 0) oss << ", ";
+        oss << hit.type;
+        if (!hit.valid) oss << "(invalid)";
+        count++;
+    }
+    if (count > 0) oss << "]";
+    return oss.str();
+}
+
+static std::string summarize_fingerprint_match(bool matched, const std::string &existing_path) {
+    if (!matched) return std::string();
+    if (!existing_path.empty()) {
+        return "fingerprint_match=" + existing_path;
+    }
+    return "fingerprint_match=yes";
+}
+
 static void process_notifications(BYTE *buf, DWORD bytes, const std::string &basepath) {
     FILE_NOTIFY_INFORMATION *fni = (FILE_NOTIFY_INFORMATION*)buf;
     while (true) {
@@ -168,10 +216,10 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
             bool size_exceeded = false;
             bool keyword_found = false;
             bool is_removable = (ev.drive_type == "REMOVABLE");
+            std::vector<unsigned char> data;
 
             if (fni->Action != FILE_ACTION_REMOVED && fni->Action != FILE_ACTION_RENAMED_OLD_NAME) {
                 if (path_is_directory(fullpath)) goto next_item;
-                std::vector<unsigned char> data;
                 size_t file_size = 0;
                 if (read_file_bytes(fullpath, g_max_scan_bytes, data, file_size)) {
                     ev.size_bytes = file_size;
@@ -181,6 +229,25 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
                 }
             }
 
+            std::string text(reinterpret_cast<const char*>(data.data()), data.size());
+            auto rule_hits = g_rule_engine.scan_text(text);
+            std::string partial_hash = partial_sha256(data, g_max_scan_bytes);
+            auto hash_hits = g_rule_engine.scan_hashes(ev.sha256, partial_hash);
+            rule_hits.insert(rule_hits.end(), hash_hits.begin(), hash_hits.end());
+            auto pii_hits = detect_pii(text, g_national_id_patterns);
+
+            bool fingerprint_matched = false;
+            std::string fingerprint_path;
+            if (!data.empty()) {
+                fingerprint_matched = sqlite_find_fingerprint(ev.sha256, partial_hash, ev.size_bytes, fingerprint_path);
+                FileFingerprint fp;
+                fp.path = fullpath;
+                fp.size_bytes = ev.size_bytes;
+                fp.full_hash = ev.sha256;
+                fp.partial_hash = partial_hash;
+                sqlite_insert_fingerprint(fp);
+            }
+
             PolicyDecision decision = evaluate_file_policy(
                 size_exceeded,
                 keyword_found,
@@ -188,7 +255,20 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
                 g_block_on_match,
                 g_alert_on_removable);
             ev.decision = decision.decision;
-            ev.reason = decision.reason;
+            std::vector<std::string> extra_reasons;
+            extra_reasons.push_back(decision.reason);
+            auto rules_summary = summarize_rule_hits(rule_hits);
+            if (!rules_summary.empty()) extra_reasons.push_back(rules_summary);
+            auto pii_summary = summarize_pii_hits(pii_hits);
+            if (!pii_summary.empty()) extra_reasons.push_back(pii_summary);
+            auto fp_summary = summarize_fingerprint_match(fingerprint_matched, fingerprint_path);
+            if (!fp_summary.empty()) extra_reasons.push_back(fp_summary);
+            std::ostringstream reason_stream;
+            for (size_t i = 0; i < extra_reasons.size(); ++i) {
+                if (i > 0) reason_stream << " | ";
+                reason_stream << extra_reasons[i];
+            }
+            ev.reason = reason_stream.str();
             emit_file_event(ev);
         }
 next_item:

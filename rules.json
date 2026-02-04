@@ -1,0 +1,28 @@
+{
+  "rules": [
+    {
+      "id": "kw-001",
+      "name": "Confidential keywords",
+      "type": "keyword",
+      "keywords": ["confidential", "secret", "personal data"],
+      "priority": 3,
+      "severity": 4
+    },
+    {
+      "id": "regex-001",
+      "name": "US SSN format",
+      "type": "regex",
+      "pattern": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+      "priority": 5,
+      "severity": 5
+    },
+    {
+      "id": "hash-001",
+      "name": "Known sensitive hash",
+      "type": "hash",
+      "hashes": ["e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"],
+      "priority": 9,
+      "severity": 5
+    }
+  ]
+}
