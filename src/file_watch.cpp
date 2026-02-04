@@ -9,6 +9,8 @@
 #include "rule_engine.h"
 #include "pii_detector.h"
 #include "fingerprint.h"
+#include "enterprise/process_attribution.h"
+#include "enterprise/extraction/content_extractor.h"
 
 #include <windows.h>
 #include <string>
@@ -71,6 +73,81 @@ static std::string drive_type_for_path(const std::string &path) {
         case DRIVE_RAMDISK: return "RAMDISK";
         default: return "UNKNOWN";
     }
+}
+
+static std::string file_extension(const std::string &path) {
+    auto pos = path.find_last_of('.');
+    if (pos == std::string::npos) return "";
+    std::string ext = path.substr(pos);
+    return to_lower_str_fw(ext);
+}
+
+static HANDLE g_driver_handle = INVALID_HANDLE_VALUE;
+
+static void initialize_driver_handle() {
+    if (g_driver_handle != INVALID_HANDLE_VALUE) return;
+    g_driver_handle = CreateFileA("\\\\.\\DlpMinifilter",
+                                  GENERIC_READ | GENERIC_WRITE,
+                                  FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                  nullptr,
+                                  OPEN_EXISTING,
+                                  FILE_ATTRIBUTE_NORMAL,
+                                  nullptr);
+    if (g_driver_handle == INVALID_HANDLE_VALUE) {
+        log_info("Minifilter driver not available, using user-mode enforcement");
+    } else {
+        log_info("Minifilter driver connected");
+    }
+}
+
+static bool ensure_directory(const std::string &path) {
+    if (path.empty()) return false;
+    if (CreateDirectoryA(path.c_str(), nullptr) || GetLastError() == ERROR_ALREADY_EXISTS) {
+        return true;
+    }
+    return false;
+}
+
+static std::string build_storage_path(const std::string &root, const std::string &original_path) {
+    if (root.empty()) return {};
+    size_t pos = original_path.find_last_of("\\/");
+    std::string filename = (pos == std::string::npos) ? original_path : original_path.substr(pos + 1);
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    char stamp[64];
+    snprintf(stamp, sizeof(stamp), "%04u%02u%02u%02u%02u%02u",
+             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    return root + "\\" + stamp + "_" + filename;
+}
+
+static bool copy_to_shadow(const std::string &path, const std::string &shadow_root, std::string &out_path) {
+    if (!ensure_directory(shadow_root)) return false;
+    out_path = build_storage_path(shadow_root, path);
+    return CopyFileA(path.c_str(), out_path.c_str(), FALSE) == TRUE;
+}
+
+static bool move_to_quarantine(const std::string &path, const std::string &quarantine_root, std::string &out_path) {
+    if (!ensure_directory(quarantine_root)) return false;
+    out_path = build_storage_path(quarantine_root, path);
+    if (MoveFileExA(path.c_str(), out_path.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING)) {
+        return true;
+    }
+    if (CopyFileA(path.c_str(), out_path.c_str(), FALSE)) {
+        DeleteFileA(path.c_str());
+        return true;
+    }
+    return false;
+}
+
+static int enforcement_rank(RuleAction action) {
+    switch (action) {
+        case RuleAction::Block: return 5;
+        case RuleAction::Quarantine: return 4;
+        case RuleAction::ShadowCopy: return 3;
+        case RuleAction::Alert: return 2;
+        case RuleAction::Allow: return 1;
+    }
+    return 0;
 }
 
 static bool read_file_bytes(const std::string &path, size_t max_bytes, std::vector<unsigned char> &out, size_t &size_out) {
@@ -212,6 +289,12 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
             ev.user = get_username();
             ev.drive_type = drive_type_for_path(fullpath);
             ev.size_bytes = 0;
+            auto proc_info = dlp::process::GetProcessAttribution(GetCurrentProcessId());
+            ev.process_name = proc_info.process_name;
+            ev.pid = proc_info.pid;
+            ev.ppid = proc_info.ppid;
+            ev.command_line = proc_info.command_line;
+            ev.user_sid = proc_info.token.user_sid;
 
             bool size_exceeded = false;
             bool keyword_found = false;
@@ -230,6 +313,13 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
             }
 
             std::string text(reinterpret_cast<const char*>(data.data()), data.size());
+            std::string extension = file_extension(fullpath);
+            if (text.empty()) {
+                auto extractor = dlp::extract::CreateExtractorForExtension(extension);
+                if (extractor) {
+                    text = extractor->ExtractText(fullpath);
+                }
+            }
             auto rule_hits = g_rule_engine.scan_text(text);
             std::string partial_hash = partial_sha256(data, g_max_scan_bytes);
             auto hash_hits = g_rule_engine.scan_hashes(ev.sha256, partial_hash);
@@ -248,12 +338,30 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
                 sqlite_insert_fingerprint(fp);
             }
 
-            PolicyDecision decision = evaluate_file_policy(
+            RuleContext rule_context;
+            rule_context.path = fullpath;
+            rule_context.extension = extension;
+            rule_context.user = ev.user;
+            rule_context.drive_type = ev.drive_type;
+            rule_context.process_name = ev.process_name;
+            rule_context.destination = ev.drive_type;
+            rule_context.contains_pii = !pii_hits.empty();
+            rule_context.keyword_hit = keyword_found;
+            rule_context.size_exceeded = size_exceeded;
+            rule_context.removable_drive = is_removable;
+            rule_context.fingerprint_matched = fingerprint_matched;
+
+            auto base_decision = evaluate_file_policy(
                 size_exceeded,
                 keyword_found,
                 is_removable,
                 g_block_on_match,
                 g_alert_on_removable);
+            auto rule_decision = g_rule_engine.evaluate(rule_context, rule_hits);
+            auto policy_decision = resolve_rule_decision(rule_decision, is_removable, g_alert_on_removable);
+            PolicyDecision decision = (enforcement_rank(policy_decision.action) >= enforcement_rank(base_decision.action))
+                ? policy_decision
+                : base_decision;
             ev.decision = decision.decision;
             std::vector<std::string> extra_reasons;
             extra_reasons.push_back(decision.reason);
@@ -269,6 +377,32 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
                 reason_stream << extra_reasons[i];
             }
             ev.reason = reason_stream.str();
+
+            if (fni->Action == FILE_ACTION_ADDED || fni->Action == FILE_ACTION_MODIFIED ||
+                fni->Action == FILE_ACTION_RENAMED_NEW_NAME) {
+                std::string enforcement_detail;
+                if (decision.action == RuleAction::ShadowCopy && g_enable_shadow_copy) {
+                    std::string shadow_path;
+                    if (copy_to_shadow(fullpath, g_shadow_copy_dir, shadow_path)) {
+                        enforcement_detail = "shadow_copy=" + shadow_path;
+                    }
+                } else if (decision.action == RuleAction::Quarantine && g_enable_quarantine) {
+                    std::string quarantine_path;
+                    if (move_to_quarantine(fullpath, g_quarantine_dir, quarantine_path)) {
+                        enforcement_detail = "quarantine=" + quarantine_path;
+                    }
+                } else if (decision.action == RuleAction::Block) {
+                    if (DeleteFileA(fullpath.c_str()) == TRUE) {
+                        enforcement_detail = "blocked_deleted";
+                    } else {
+                        enforcement_detail = "block_failed";
+                    }
+                }
+                if (!enforcement_detail.empty()) {
+                    if (!ev.reason.empty()) ev.reason += " | ";
+                    ev.reason += enforcement_detail;
+                }
+            }
             emit_file_event(ev);
         }
 next_item:
@@ -307,6 +441,7 @@ static void watch_path_thread(const std::string &path) {
 
 void file_watch_thread() {
     log_info("File watch thread started");
+    initialize_driver_handle();
     std::vector<std::thread> workers;
     // always watch local user folder
     workers.emplace_back(watch_path_thread, std::string("C:\\Users"));
@@ -327,4 +462,8 @@ void file_watch_thread() {
     }
 
     for (auto &t : workers) if (t.joinable()) t.join();
+    if (g_driver_handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(g_driver_handle);
+        g_driver_handle = INVALID_HANDLE_VALUE;
+    }
 }

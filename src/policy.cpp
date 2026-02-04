@@ -17,6 +17,17 @@ bool is_usb_allowed(const std::string &serial) {
     return false;
 }
 
+const char *action_to_string(RuleAction action) {
+    switch (action) {
+        case RuleAction::Allow: return "ALLOW";
+        case RuleAction::Alert: return "ALERT";
+        case RuleAction::Block: return "BLOCK";
+        case RuleAction::Quarantine: return "QUARANTINE";
+        case RuleAction::ShadowCopy: return "SHADOW_COPY";
+    }
+    return "ALLOW";
+}
+
 PolicyDecision evaluate_file_policy(bool size_exceeded,
                                     bool keyword_hit,
                                     bool removable_drive,
@@ -35,13 +46,30 @@ PolicyDecision evaluate_file_policy(bool size_exceeded,
             out.reason += reasons[i];
         }
         if (keyword_hit && block_on_match) {
-            out.decision = "BLOCK";
+            out.action = RuleAction::Block;
         } else {
-            out.decision = "ALERT";
+            out.action = RuleAction::Alert;
         }
     } else {
-        out.decision = "ALLOW";
+        out.action = RuleAction::Allow;
         out.reason = "policy_ok";
     }
+    out.decision = action_to_string(out.action);
+    return out;
+}
+
+PolicyDecision resolve_rule_decision(const RuleDecision &rule_decision,
+                                     bool removable_drive,
+                                     bool alert_on_removable) {
+    PolicyDecision out;
+    out.action = rule_decision.action;
+    out.severity = rule_decision.severity;
+    if (out.action == RuleAction::Allow && removable_drive && alert_on_removable) {
+        out.action = RuleAction::Alert;
+        out.reason = "removable_drive";
+    } else {
+        out.reason = rule_decision.reason;
+    }
+    out.decision = action_to_string(out.action);
     return out;
 }
