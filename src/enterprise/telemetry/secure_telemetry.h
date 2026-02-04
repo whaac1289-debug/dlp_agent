@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -36,8 +37,11 @@ struct TelemetryConfig {
     std::string ca_bundle_path;
     std::string pinned_spki_hash;
     std::string spool_path;
+    std::string device_id;
+    std::string policy_version;
     size_t max_batch_size{250};
     size_t max_spool_size_bytes{50 * 1024 * 1024};
+    size_t max_pending_events{2000};
 };
 
 class SecureHttpClient {
@@ -52,13 +56,14 @@ private:
 
 class DiskSpoolQueue {
 public:
-    explicit DiskSpoolQueue(std::string root_path);
+    DiskSpoolQueue(std::string root_path, size_t max_size_bytes);
     bool Enqueue(const TelemetryBatch& batch);
     std::optional<TelemetryBatch> Dequeue();
     size_t SizeBytes() const;
 
 private:
     std::string root_path_;
+    size_t max_size_bytes_{0};
     mutable std::mutex mutex_;
     size_t size_bytes_{0};
     bool LoadSize();
@@ -69,6 +74,7 @@ public:
     SecureTelemetry(TelemetryConfig config, RetryPolicy retry);
     void EnqueueEvent(const TelemetryEvent& event);
     void Flush();
+    void UpdateContext(const std::string& device_id, const std::string& policy_version);
 
 private:
     TelemetryBatch BuildBatch();

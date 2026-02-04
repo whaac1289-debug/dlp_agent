@@ -30,12 +30,12 @@
 - Strukturalangan fayl/qurilma hodisalari `events_v2` va `device_events` jadvallarida saqlanadi.
 
 ### 6) Telemetriya
-- `server_url` manziliga libcurl orqali JSON POST (heartbeat) yuboradi.
+- `telemetry_endpoint` manziliga libcurl orqali xavfsiz telemetriya paketlarini yuboradi.
 - Qayta urinishga yaroqli xatoliklar lokal logga yoziladi.
 
 ## Konfiguratsiya
 Agentning asosiy xatti-harakati `config.json` orqali boshqariladi:
-- `server_url` — hodisa paketlari uchun API endpoint.
+- `telemetry_endpoint` — telemetriya paketlari uchun API endpoint.
 - `extension_filter` — kuzatiladigan fayl kengaytmalari ro‘yxati (masalan, [".txt", ".docx"]).
 - `size_threshold` — fayl hajmi bo‘yicha chegaralash (baytlarda).
 - `usb_allow_serials` — ruxsat etilgan USB serial ro‘yxati.

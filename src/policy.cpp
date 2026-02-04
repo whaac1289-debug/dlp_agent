@@ -28,34 +28,8 @@ const char *action_to_string(RuleAction action) {
     return "ALLOW";
 }
 
-PolicyDecision evaluate_file_policy(bool size_exceeded,
-                                    bool keyword_hit,
-                                    bool removable_drive,
-                                    bool block_on_match,
-                                    bool alert_on_removable) {
-    PolicyDecision out;
-    std::vector<std::string> reasons;
-    if (size_exceeded) reasons.push_back("size_threshold");
-    if (keyword_hit) reasons.push_back("content_keyword");
-    if (removable_drive && alert_on_removable) reasons.push_back("removable_drive");
-
-    if (!reasons.empty()) {
-        out.reason.clear();
-        for (size_t i = 0; i < reasons.size(); ++i) {
-            if (i) out.reason += ",";
-            out.reason += reasons[i];
-        }
-        if (keyword_hit && block_on_match) {
-            out.action = RuleAction::Block;
-        } else {
-            out.action = RuleAction::Alert;
-        }
-    } else {
-        out.action = RuleAction::Allow;
-        out.reason = "policy_ok";
-    }
-    out.decision = action_to_string(out.action);
-    return out;
+bool should_block_driver(const PolicyDecision &decision) {
+    return decision.action == RuleAction::Block || decision.action == RuleAction::Quarantine;
 }
 
 PolicyDecision resolve_rule_decision(const RuleDecision &rule_decision,
@@ -69,6 +43,9 @@ PolicyDecision resolve_rule_decision(const RuleDecision &rule_decision,
         out.reason = "removable_drive";
     } else {
         out.reason = rule_decision.reason;
+    }
+    if (out.reason.empty()) {
+        out.reason = "no_match";
     }
     out.decision = action_to_string(out.action);
     return out;

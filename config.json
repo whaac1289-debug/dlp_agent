@@ -1,5 +1,4 @@
 {
-  "server_url": "http://localhost:8080/api/events",
   "extension_filter": [".txt", ".log", ".docx"],
   "size_threshold": 10485760,
   "usb_allow_serials": [],
@@ -9,5 +8,25 @@
   "block_on_match": false,
   "alert_on_removable": true,
   "rules_config": "rules.json",
-  "national_id_patterns": ["\\b\\d{3}-\\d{2}-\\d{4}\\b"]
+  "national_id_patterns": ["\\b\\d{3}-\\d{2}-\\d{4}\\b"],
+  "telemetry_endpoint": "https://localhost:8443/api/v2/telemetry",
+  "telemetry_spool_path": "telemetry_spool",
+  "telemetry_ca_bundle": "",
+  "telemetry_client_cert": "",
+  "telemetry_client_key": "",
+  "telemetry_pinned_spki": "",
+  "quarantine_dir": "C:\\\\ProgramData\\\\DLPAgent\\\\Quarantine",
+  "shadow_copy_dir": "C:\\\\ProgramData\\\\DLPAgent\\\\ShadowCopy",
+  "policy_endpoint": "",
+  "policy_api_key": "",
+  "policy_hmac_key": "",
+  "policy_public_key": "",
+  "policy_store_path": "policy_snapshot.json",
+  "config_signature_path": "config.json.sig",
+  "expected_binary_hash": "",
+  "block_severity_threshold": 8,
+  "quarantine_severity_threshold": 9,
+  "shadow_copy_severity_threshold": 6,
+  "enable_shadow_copy": true,
+  "enable_quarantine": true
 }

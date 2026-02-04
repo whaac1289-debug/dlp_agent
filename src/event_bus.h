@@ -16,6 +16,11 @@ struct FileEvent {
     std::string command_line;
     size_t size_bytes = 0;
     std::string sha256;
+    std::string rule_id;
+    std::string rule_name;
+    int severity = 0;
+    std::string content_flags;
+    std::string device_context;
     std::string decision;
     std::string reason;
 };

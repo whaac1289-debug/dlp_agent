@@ -5,10 +5,10 @@
 #include "file_watch.h"
 #include "api.h"
 #include "sqlite_store.h"
-#include "rule_engine.h"
 #include "enterprise/anti_tamper/anti_tamper.h"
 
 #include <windows.h>
+#include <chrono>
 #include <thread>
 #include <vector>
 
@@ -51,16 +51,31 @@ int main() {
         return 1;
     }
 
-    if (!g_rule_engine.load_from_file(g_rules_path)) {
-        log_error("Failed to load rules config");
-    }
-
     // Start worker threads
     g_running = true;
     std::vector<std::thread> workers;
     workers.emplace_back(usb_scan_thread);
     workers.emplace_back(file_watch_thread);
+    workers.emplace_back(driver_policy_thread);
     workers.emplace_back(api_sender_thread);
+    workers.emplace_back([anti_tamper]() mutable {
+        while (g_running) {
+            if (anti_tamper.IsDebuggerPresent()) {
+                log_error("Anti-tamper: debugger detected");
+            }
+            if (!anti_tamper.VerifyConfigSignature("config.json", g_config_signature_path)) {
+                log_error("Anti-tamper: config signature invalid");
+            }
+            char module_path[MAX_PATH];
+            if (GetModuleFileNameA(nullptr, module_path, MAX_PATH)) {
+                auto result = anti_tamper.VerifyBinaryIntegrity(module_path);
+                if (!result.ok) {
+                    log_error("Anti-tamper: binary integrity failure (%s)", result.detail.c_str());
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(30));
+        }
+    });
 
     // Run service loop in its own thread so main can accept user input
     std::thread svc(service_loop);

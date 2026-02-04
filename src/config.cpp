@@ -6,7 +6,6 @@
 #include <sstream>
 #include <unordered_set>
 
-std::string g_server_url = "http://localhost:8080/api/events";
 std::vector<std::string> g_extension_filter = {".txt", ".log"};
 size_t g_size_threshold = 10 * 1024 * 1024;
 std::vector<std::string> g_usb_allow_serials;
@@ -30,6 +29,8 @@ std::string g_policy_api_key;
 std::string g_policy_hmac_key;
 std::string g_policy_public_key;
 std::string g_policy_store_path = "policy_snapshot.json";
+std::string g_policy_version;
+std::mutex g_policy_mutex;
 std::string g_config_signature_path = "config.json.sig";
 std::string g_expected_binary_hash;
 int g_block_severity_threshold = 8;
@@ -162,8 +163,6 @@ bool load_config(const char *path) {
     oss << ifs.rdbuf();
     std::string s = oss.str();
 
-    auto url = extract_string(s, "server_url");
-    if (!url.empty()) g_server_url = url;
     auto exts = extract_array(s, "extension_filter");
     if (!exts.empty()) g_extension_filter = exts;
     auto serials = extract_array(s, "usb_allow_serials");
@@ -233,10 +232,6 @@ bool load_config(const char *path) {
     if (g_hash_max_bytes == 0) {
         g_hash_max_bytes = 1024 * 1024;
         fprintf(stderr, "config warning: hash_max_bytes invalid, using default\n");
-    }
-    if (g_server_url.empty()) {
-        g_server_url = "http://localhost:8080/api/events";
-        fprintf(stderr, "config warning: server_url empty, using default\n");
     }
     if (g_rules_path.empty()) {
         g_rules_path = "rules.json";

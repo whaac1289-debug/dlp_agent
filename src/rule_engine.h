@@ -79,5 +79,3 @@ public:
 private:
     std::vector<Rule> rules_;
 };
-
-extern RuleEngine g_rule_engine;

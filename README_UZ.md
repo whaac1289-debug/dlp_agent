@@ -11,7 +11,7 @@
 - **Telemetriya**: libcurl orqali sozlanadigan server URL ga heartbeat POST yuboriladi.
 
 ## Fayllar va kataloglar
-- `config.json` — runtime konfiguratsiya (server_url, extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable, rules_config, national_id_patterns).
+- `config.json` — runtime konfiguratsiya (extension_filter, size_threshold, usb_allow_serials, content_keywords, max_scan_bytes, hash_max_bytes, block_on_match, alert_on_removable, rules_config, national_id_patterns, telemetry_* va policy_* maydonlari).
 - `rules.json` — rule engine uchun namunaviy qoidalar (regex/keyword/hash).
 - `src/main.cpp` — kirish nuqtasi va worker thread’lar.
 - `src/file_watch.cpp` — ReadDirectoryChangesW asosidagi file watcher.
@@ -57,7 +57,7 @@ Get-Content run_all.txt -Wait
 ```
 
 ## Konfiguratsiya
-`config.json` faylida `server_url`, `extension_filter`, `size_threshold` va USB allowlist’ni yangilang. Qo‘shimcha DLP nazoratlari:
+`config.json` faylida `extension_filter`, `size_threshold` va USB allowlist’ni yangilang. Qo‘shimcha DLP nazoratlari:
 
 - `content_keywords`: `max_scan_bytes` ichida case-insensitive keyword qidirish.
 - `max_scan_bytes`: keyword skan qilish uchun maksimum bayt.

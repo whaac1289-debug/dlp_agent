@@ -40,6 +40,11 @@ void emit_file_event(const FileEvent &ev) {
         << "\"command_line\":\"" << json_escape(ev.command_line) << "\","
         << "\"size_bytes\":" << ev.size_bytes << ","
         << "\"sha256\":\"" << json_escape(ev.sha256) << "\","
+        << "\"rule_id\":\"" << json_escape(ev.rule_id) << "\","
+        << "\"rule_name\":\"" << json_escape(ev.rule_name) << "\","
+        << "\"severity\":" << ev.severity << ","
+        << "\"content_flags\":\"" << json_escape(ev.content_flags) << "\","
+        << "\"device_context\":\"" << json_escape(ev.device_context) << "\","
         << "\"decision\":\"" << json_escape(ev.decision) << "\","
         << "\"reason\":\"" << json_escape(ev.reason) << "\""
         << "}";

@@ -2,8 +2,8 @@
 #include <string>
 #include <vector>
 #include <atomic>
+#include <mutex>
 
-extern std::string g_server_url;
 extern std::vector<std::string> g_extension_filter;
 extern size_t g_size_threshold;
 extern std::vector<std::string> g_usb_allow_serials;
@@ -27,6 +27,8 @@ extern std::string g_policy_api_key;
 extern std::string g_policy_hmac_key;
 extern std::string g_policy_public_key;
 extern std::string g_policy_store_path;
+extern std::string g_policy_version;
+extern std::mutex g_policy_mutex;
 extern std::string g_config_signature_path;
 extern std::string g_expected_binary_hash;
 extern int g_block_severity_threshold;
