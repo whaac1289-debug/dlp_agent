@@ -54,13 +54,6 @@ PowerShell (redirect output):
 Get-Content run_all.txt -Wait
 ```
 
-Inspect database
-
-```bash
-python load.py --db dlp_agent.db --list-tables
-python load.py --db dlp_agent.db --table events --limit 50
-```
-
 Configuration
 
 Edit [config.json](config.json) to change `server_url`, `extension_filter` (e.g., add ".docx"), `size_threshold`, or USB allowlist.
