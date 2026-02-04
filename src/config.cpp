@@ -1,6 +1,7 @@
 #include "config.h"
 #include <fstream>
 #include <algorithm>
+#include <cctype>
 #include <sstream>
 
 std::string g_server_url = "http://localhost:8080/api/events";

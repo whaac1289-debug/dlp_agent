@@ -31,7 +31,7 @@ void usb_scan_thread() {
                 char drv = 'A' + i;
                 char root[4] = { drv, ':', '\\', '\0' };
                 UINT type = GetDriveTypeA(root);
-                if (type == DRIVE_REMOVABLE || type == DRIVE_FIXED) {
+                if (type == DRIVE_REMOVABLE) {
                     std::string serial = get_volume_serial(drv);
                     DeviceEvent ev;
                     ev.drive_letter = std::string(1, drv);
