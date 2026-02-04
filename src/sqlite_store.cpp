@@ -31,9 +31,16 @@ bool sqlite_init(const char *path) {
         "serial TEXT,"
         "allowed INTEGER);";
     char *err = nullptr;
-    sqlite3_exec(g_db, schema, nullptr, nullptr, &err);
+    int rc = sqlite3_exec(g_db, schema, nullptr, nullptr, &err);
     if (err) { sqlite3_free(err); }
-    return true;
+    return rc == SQLITE_OK;
+}
+
+void sqlite_shutdown() {
+    std::lock_guard<std::mutex> lk(g_db_mtx);
+    if (!g_db) return;
+    sqlite3_close(g_db);
+    g_db = nullptr;
 }
 
 void sqlite_insert_event(const std::string &ev) {

@@ -12,6 +12,9 @@ static std::mutex g_log_mtx;
 bool log_init(const char *path) {
     std::lock_guard<std::mutex> lk(g_log_mtx);
     g_logf = fopen(path, "a");
+    if (g_logf) {
+        setvbuf(g_logf, nullptr, _IOLBF, 0);
+    }
     return g_logf != nullptr;
 }
 
@@ -30,8 +33,10 @@ static void vlog_and_store(const char *level, const char *fmt, va_list ap) {
     char timestr[64];
     strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", &tmv);
     std::lock_guard<std::mutex> lk(g_log_mtx);
-    if (g_logf) fprintf(g_logf, "%s [%s] %s\n", timestr, level, buf);
-    fflush(g_logf);
+    if (g_logf) {
+        fprintf(g_logf, "%s [%s] %s\n", timestr, level, buf);
+        fflush(g_logf);
+    }
     // also store into sqlite minimal events table
     sqlite_insert_log(timestr, level, buf);
 }

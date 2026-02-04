@@ -20,7 +20,11 @@ int main() {
         return 1;
     }
 
-    sqlite_init("dlp_agent.db");
+    if (!sqlite_init("dlp_agent.db")) {
+        log_error("Failed to initialize sqlite database");
+        log_shutdown();
+        return 1;
+    }
 
     // Start worker threads
     g_running = true;
@@ -45,6 +49,7 @@ int main() {
         if (t.joinable()) t.join();
     }
 
+    sqlite_shutdown();
     log_shutdown();
     return 0;
 }
