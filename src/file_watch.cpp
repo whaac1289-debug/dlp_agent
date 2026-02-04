@@ -29,6 +29,20 @@ static std::string to_lower_str_fw(const std::string &s) {
     return out;
 }
 
+static bool should_ignore_name(const std::string &name) {
+    if (name.empty()) return true;
+    std::string lower = to_lower_str_fw(name);
+    if (lower.rfind("~$", 0) == 0) return true;
+    if (lower.size() >= 4 && lower.compare(lower.size() - 4, 4, ".tmp") == 0) return true;
+    return false;
+}
+
+static bool path_is_directory(const std::string &path) {
+    DWORD attrs = GetFileAttributesA(path.c_str());
+    if (attrs == INVALID_FILE_ATTRIBUTES) return false;
+    return (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
 static std::string get_username() {
     char buf[256];
     DWORD len = sizeof(buf);
@@ -131,9 +145,7 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
         } else fullpath = name;
 
         // ignore temporary Office lockfiles starting with ~$ and .tmp
-        if (!name.empty()) {
-            if (name.rfind("~$", 0) == 0) goto next_item;
-        }
+        if (should_ignore_name(name)) goto next_item;
         // extension filter
         if (extension_allowed(name)) {
             const char *action = "UNKNOWN";
@@ -158,6 +170,7 @@ static void process_notifications(BYTE *buf, DWORD bytes, const std::string &bas
             bool is_removable = (ev.drive_type == "REMOVABLE");
 
             if (fni->Action != FILE_ACTION_REMOVED && fni->Action != FILE_ACTION_RENAMED_OLD_NAME) {
+                if (path_is_directory(fullpath)) goto next_item;
                 std::vector<unsigned char> data;
                 size_t file_size = 0;
                 if (read_file_bytes(fullpath, g_max_scan_bytes, data, file_size)) {
