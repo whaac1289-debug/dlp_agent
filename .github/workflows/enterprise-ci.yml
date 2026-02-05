@@ -194,9 +194,13 @@ jobs:
   
           for f in "${files[@]}"; do
             tag=$(echo "ci-$f" | tr '/.' '-' | tr '[:upper:]' '[:lower:]')
-            dir=$(dirname "$f")
   
-            echo "Building $f with context $dir → tag=$tag"
-            docker build -f "$f" -t "$tag" "$dir"
+            if grep -q "COPY server/" "$f"; then
+              ctx="."
+            else
+              ctx=$(dirname "$f")
+            fi
+  
+            echo "Building $f with context $ctx → tag=$tag"
+            docker build -f "$f" -t "$tag" "$ctx"
           done
-
