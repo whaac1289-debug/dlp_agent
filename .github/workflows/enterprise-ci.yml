@@ -191,7 +191,7 @@ jobs:
           fi
 
           for f in "${files[@]}"; do
-            tag="ci-$(echo "$f" | tr '/.' '-')"
+            tag=$(echo "ci-$f" | tr '/.' '-' | tr '[:upper:]' '[:lower:]')
             echo "Building $f with ROOT context"
             docker build -f "$f" -t "$tag" .
           done
