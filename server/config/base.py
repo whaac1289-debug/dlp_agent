@@ -1,4 +1,5 @@
 from pydantic import Field
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,3 +44,31 @@ class BaseConfig(BaseSettings):
     metrics_enabled: bool = True
     enrollment_token_ttl_hours: int = 24
     enrollment_signing_secret: str = Field(..., repr=False)
+
+    @field_validator("jwt_secret", "admin_password", "enrollment_signing_secret", mode="after")
+    @classmethod
+    def validate_secret_strength(cls, value: str) -> str:
+        if len(value) < 24:
+            raise ValueError("sensitive settings must be at least 24 characters")
+        return value
+
+    @field_validator("allowed_origins", mode="after")
+    @classmethod
+    def validate_allowed_origins(cls, origins: list[str]) -> list[str]:
+        for origin in origins:
+            if not origin.startswith(("https://", "http://localhost", "http://127.0.0.1")):
+                raise ValueError(f"invalid origin '{origin}'")
+        return origins
+
+    @model_validator(mode="after")
+    def validate_production_transport_security(self) -> "BaseConfig":
+        if self.environment == "prod":
+            insecure_http = [
+                origin
+                for origin in self.allowed_origins
+                if origin.startswith("http://")
+                and not origin.startswith(("http://localhost", "http://127.0.0.1"))
+            ]
+            if insecure_http:
+                raise ValueError("prod environment requires https origins")
+        return self
