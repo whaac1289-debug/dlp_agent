@@ -18,3 +18,9 @@ def test_detection_entropy_threshold():
     high_entropy = "aB3!xZ9" * 10
     report = run_detection({"metadata": {"content": high_entropy}}, [])
     assert any(finding.detector == "entropy" for finding in report.findings)
+
+
+def test_detection_entropy_legacy_payload_content_compatibility():
+    high_entropy = "aB3!xZ9" * 10
+    report = run_detection({"content": high_entropy}, [])
+    assert any(finding.detector == "entropy" for finding in report.findings)

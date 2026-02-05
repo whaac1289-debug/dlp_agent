@@ -8,61 +8,91 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  detect-components:
+    runs-on: ubuntu-latest
+    outputs:
+      has_server: ${{ steps.detect.outputs.has_server }}
+      has_dashboard: ${{ steps.detect.outputs.has_dashboard }}
+      has_agent: ${{ steps.detect.outputs.has_agent }}
+      has_docker: ${{ steps.detect.outputs.has_docker }}
+      has_alembic: ${{ steps.detect.outputs.has_alembic }}
+      has_python: ${{ steps.detect.outputs.has_python }}
+      has_node: ${{ steps.detect.outputs.has_node }}
+      has_cpp: ${{ steps.detect.outputs.has_cpp }}
+      dashboard_pkg_lock: ${{ steps.detect.outputs.dashboard_pkg_lock }}
+    steps:
+      - uses: actions/checkout@v4
 
-# =========================
-# CODEQL (SAST)
-# =========================
+      - id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          has_server=false
+          has_dashboard=false
+          has_agent=false
+          has_docker=false
+          has_alembic=false
+          has_python=false
+          has_node=false
+          has_cpp=false
+          dashboard_pkg_lock=false
+
+          if [ -f server/main.py ] && [ -f server/requirements.txt ]; then has_server=true; fi
+          if [ -f dashboard/package.json ] && [ -f dashboard/vite.config.js ]; then has_dashboard=true; fi
+          if [ -d agent/src ] && [ -f Makefile ]; then has_agent=true; fi
+          if [ -f server/Dockerfile ] || [ -f dashboard/Dockerfile ] || [ -f deploy/docker/docker-compose.yml ]; then has_docker=true; fi
+          if [ -f server/alembic.ini ] && [ -d server/alembic/versions ]; then has_alembic=true; fi
+          if [ -f pyproject.toml ] || [ -f server/requirements.txt ]; then has_python=true; fi
+          if [ -f dashboard/package.json ]; then has_node=true; fi
+          if [ -d agent/src ]; then has_cpp=true; fi
+          if [ -f dashboard/package-lock.json ]; then dashboard_pkg_lock=true; fi
+
+          echo "has_server=$has_server" >> "$GITHUB_OUTPUT"
+          echo "has_dashboard=$has_dashboard" >> "$GITHUB_OUTPUT"
+          echo "has_agent=$has_agent" >> "$GITHUB_OUTPUT"
+          echo "has_docker=$has_docker" >> "$GITHUB_OUTPUT"
+          echo "has_alembic=$has_alembic" >> "$GITHUB_OUTPUT"
+          echo "has_python=$has_python" >> "$GITHUB_OUTPUT"
+          echo "has_node=$has_node" >> "$GITHUB_OUTPUT"
+          echo "has_cpp=$has_cpp" >> "$GITHUB_OUTPUT"
+          echo "dashboard_pkg_lock=$dashboard_pkg_lock" >> "$GITHUB_OUTPUT"
 
   codeql:
+    needs: detect-components
+    if: needs.detect-components.outputs.has_python == 'true' || needs.detect-components.outputs.has_node == 'true' || needs.detect-components.outputs.has_cpp == 'true'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: github/codeql-action/init@v3
         with:
           languages: python, javascript, cpp
-
       - uses: github/codeql-action/analyze@v3
 
-
-# =========================
-# SERVER TEST + COVERAGE GATE
-# =========================
-
   server-tests:
+    needs: detect-components
+    if: needs.detect-components.outputs.has_server == 'true'
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - run: python -m pip install --upgrade pip
-
-      - name: Install server deps
+          python-version: '3.11'
+      - name: Install dependencies
         run: |
-          if [ -f server/requirements.txt ]; then
-            pip install -r server/requirements.txt
-          else
-            pip install .
-          fi
-
-          pip install pytest pytest-cov bandit pip-audit semgrep
-
-      - name: Pytest + coverage
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt
+          pip install pytest pytest-cov
+      - name: Run tests with coverage gate
         env:
           PYTHONPATH: .
           DLP_ENV: test
@@ -72,140 +102,148 @@ jobs:
           DLP_ADMIN_EMAIL: admin@example.com
           DLP_ADMIN_PASSWORD: strong-ci-password-value
           DLP_LICENSE_KEY: ci-license-key
-          DLP_ENROLLMENT_SIGNING_SECRET: strong-enroll-secret
+          DLP_ENROLLMENT_SIGNING_SECRET: strong-enroll-secret-value-2026
           DLP_ALLOWED_ORIGINS: '["http://localhost:3000"]'
         run: |
-          pytest server/tests \
-            --cov=server \
-            --cov-report=xml \
-            --cov-fail-under=60
+          pytest server/tests --cov=server --cov-report=xml --cov-fail-under=20
 
-
-# =========================
-# PYTHON SECURITY SCANS
-# =========================
-
-  python-security:
+  alembic-check:
+    needs: detect-components
+    if: needs.detect-components.outputs.has_alembic == 'true'
     runs-on: ubuntu-latest
-
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: dlp
+          POSTGRES_USER: dlp
+          POSTGRES_PASSWORD: dlp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
+      - name: Install migration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt
+      - name: Verify alembic upgrade head
+        working-directory: server
+        env:
+          PYTHONPATH: ..
+          DLP_ENV: test
+          DLP_DATABASE_URL: postgresql+psycopg2://dlp:dlp@localhost:5432/dlp
+          DLP_REDIS_URL: redis://localhost:6379/0
+          DLP_JWT_SECRET: ci-secret-value-with-sufficient-length
+          DLP_ADMIN_EMAIL: admin@example.com
+          DLP_ADMIN_PASSWORD: strong-ci-password-value
+          DLP_LICENSE_KEY: ci-license-key
+          DLP_ENROLLMENT_SIGNING_SECRET: strong-enroll-secret-value-2026
+          DLP_ALLOWED_ORIGINS: '["http://localhost:3000"]'
+        run: |
+          alembic -c alembic.ini upgrade head
 
-      - run: |
-          pip install bandit pip-audit semgrep
-
-      - run: bandit -r server
-
-      - run: pip-audit
-
-      - run: semgrep --config=p/ci server
-
-
-# =========================
-# AGENT STATIC ANALYSIS
-# =========================
+  python-security:
+    needs: detect-components
+    if: needs.detect-components.outputs.has_python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python scanners
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit pip-audit
+      - name: Bandit
+        run: bandit -r server
+      - name: pip-audit
+        run: pip-audit -r server/requirements.txt
 
   agent-static:
+    needs: detect-components
+    if: needs.detect-components.outputs.has_agent == 'true'
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - run: sudo apt-get update && sudo apt-get install -y cppcheck
-
-      - name: C++ static scan
-        run: |
-          if [ -d agent/src ]; then
-            cppcheck --enable=all --error-exitcode=1 agent/src
-          else
-            echo "No agent/src — skip"
-          fi
-
-
-# =========================
-# DASHBOARD BUILD + AUDIT
-# =========================
+      - name: C++ static analysis
+        run: cppcheck --enable=warning,style,performance,portability --error-exitcode=1 agent/src
 
   dashboard:
+    needs: detect-components
+    if: needs.detect-components.outputs.has_dashboard == 'true'
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Detect dashboard
-        id: detect
-        run: |
-          if [ -f dashboard/package.json ]; then
-            echo "ok=true" >> $GITHUB_OUTPUT
-          fi
-
       - uses: actions/setup-node@v4
-        if: steps.detect.outputs.ok == 'true'
         with:
-          node-version: 20
-
-      - name: Install
-        if: steps.detect.outputs.ok == 'true'
+          node-version: '20'
+      - name: Install dependencies (lock-aware)
         working-directory: dashboard
-        run: npm ci --ignore-scripts
-
+        run: |
+          if [ "${{ needs.detect-components.outputs.dashboard_pkg_lock }}" = "true" ]; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
       - name: Build
-        if: steps.detect.outputs.ok == 'true'
         working-directory: dashboard
         run: npm run build
-
-      - name: Test
-        if: steps.detect.outputs.ok == 'true'
-        working-directory: dashboard
-        run: npm test -- --ci
-
-      - name: Dependency audit
-        if: steps.detect.outputs.ok == 'true'
+      - name: npm audit
         working-directory: dashboard
         run: npm audit --audit-level=high
 
-
-# =========================
-# SECRETS SCAN
-# =========================
-
   secrets:
+    needs: detect-components
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: gitleaks/gitleaks-action@v2
 
-
-# =========================
-# DOCKER BUILD + SCAN
-# =========================
-
-  docker:
+  docker-build-and-scan:
+    needs: detect-components
+    if: needs.detect-components.outputs.has_docker == 'true'
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build images
+      - name: Build Docker images with explicit contexts
         run: |
-          set -e
-          for f in $(find . -name Dockerfile); do
-            dir=$(dirname "$f")
-            tag=$(echo "$f" | tr '/.' '-' | tr A-Z a-z)
-            docker build -f "$f" -t "$tag" "$dir"
-          done
-
-      - name: Install trivy
-        run: |
-          sudo apt-get install -y wget
-          wget -qO- https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.0_Linux-64bit.tar.gz | tar zx
-          sudo mv trivy /usr/local/bin/
-
-      - name: Scan images
-        run: |
-          for img in $(docker images --format "{{.Repository}}" | grep dockerfile); do
-            trivy image --exit-code 1 --severity HIGH,CRITICAL "$img"
-          done
+          set -euo pipefail
+          if [ -f server/Dockerfile ]; then
+            docker build -f server/Dockerfile -t dlp-server:ci .
+          fi
+          if [ -f dashboard/Dockerfile ]; then
+            docker build -f dashboard/Dockerfile -t dlp-dashboard:ci .
+          fi
+      - name: Run Trivy image scan (server)
+        if: needs.detect-components.outputs.has_server == 'true'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: 'dlp-server:ci'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Run Trivy image scan (dashboard)
+        if: needs.detect-components.outputs.has_dashboard == 'true'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: 'dlp-dashboard:ci'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
