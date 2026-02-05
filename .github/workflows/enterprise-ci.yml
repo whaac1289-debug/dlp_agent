@@ -181,17 +181,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+  
       - name: Build Dockerfiles
+        shell: bash
         run: |
           mapfile -t files < <(find . -name Dockerfile)
+  
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No Dockerfiles — skipped"
             exit 0
           fi
-
+  
           for f in "${files[@]}"; do
             tag=$(echo "ci-$f" | tr '/.' '-' | tr '[:upper:]' '[:lower:]')
-            echo "Building $f with ROOT context"
-            docker build -f "$f" -t "$tag" .
+            dir=$(dirname "$f")
+  
+            echo "Building $f with context $dir → tag=$tag"
+            docker build -f "$f" -t "$tag" "$dir"
           done
+
