@@ -42,6 +42,9 @@ def _get_agent_from_jwt(request: Request, db: Session) -> models.Agent:
 
 async def _verify_agent_request(request: Request, db: Session) -> models.Agent:
     agent = _get_agent_from_jwt(request, db)
+    if settings.environment == "dev" and settings.dev_signature_bypass:
+        return agent
+
     signature = request.headers.get("X-Signature")
     timestamp = request.headers.get("X-Timestamp")
     nonce = request.headers.get("X-Nonce")
@@ -143,8 +146,6 @@ async def heartbeat(
     agent = await _verify_agent_request(request, db)
     if agent.agent_uuid != payload.agent_uuid:
         raise HTTPException(status_code=400, detail="agent mismatch")
-    if not agent:
-        raise HTTPException(status_code=404, detail="agent not found")
     agent.status = payload.status
     agent.last_heartbeat = payload.timestamp
     db.commit()

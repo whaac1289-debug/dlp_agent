@@ -29,7 +29,11 @@ static void vlog_and_store(const char *level, const char *fmt, va_list ap) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     time_t t = time(NULL);
     struct tm tmv;
+#ifdef _WIN32
     localtime_s(&tmv, &t);
+#else
+    localtime_r(&t, &tmv);
+#endif
     char timestr[64];
     strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", &tmv);
     std::lock_guard<std::mutex> lk(g_log_mtx);
