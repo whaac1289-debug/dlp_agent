@@ -44,6 +44,7 @@ class BaseConfig(BaseSettings):
     metrics_enabled: bool = True
     enrollment_token_ttl_hours: int = 24
     enrollment_signing_secret: str = Field(..., repr=False)
+    dev_signature_bypass: bool = False
 
     @field_validator("jwt_secret", "admin_password", "enrollment_signing_secret", mode="after")
     @classmethod
