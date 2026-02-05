@@ -1,8 +1,8 @@
 FROM node:20-alpine as build
 WORKDIR /app
-COPY package.json package-lock.json* /app/
-RUN npm ci --ignore-scripts
-COPY . /app
+COPY dashboard/package.json dashboard/package-lock.json* /app/
+RUN if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
+COPY dashboard/ /app
 RUN npm run build
 
 FROM nginx:1.27-alpine
