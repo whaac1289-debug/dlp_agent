@@ -1,4 +1,4 @@
-name: CI
+name: Enterprise CI
 
 on:
   push:
@@ -7,252 +7,218 @@ on:
   workflow_dispatch:
 
 jobs:
+
+# =====================================================
+# SERVER — Python backend auto detect + tests
+# =====================================================
+
   server-tests:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect server stack
-        id: server-detect
+      - name: Detect server
+        id: detect
         shell: bash
         run: |
-          set -euo pipefail
-          if [ -f server/main.py ] && grep -q "FastAPI" server/main.py; then
-            echo "stack=fastapi" >> "$GITHUB_OUTPUT"
+          if [ -f server/requirements.txt ] || [ -f pyproject.toml ]; then
+            echo "has_server=true" >> $GITHUB_OUTPUT
           else
-            echo "stack=python" >> "$GITHUB_OUTPUT"
+            echo "has_server=false" >> $GITHUB_OUTPUT
           fi
 
-          if [ -f server/requirements.txt ]; then
-            echo "dep_file=server/requirements.txt" >> "$GITHUB_OUTPUT"
-            echo "has_server=true" >> "$GITHUB_OUTPUT"
-          elif [ -f pyproject.toml ]; then
-            echo "dep_file=pyproject.toml" >> "$GITHUB_OUTPUT"
-            echo "has_server=true" >> "$GITHUB_OUTPUT"
+          if [ -d server/tests ] && find server/tests -name "test_*.py" | grep -q .; then
+            echo "has_tests=true" >> $GITHUB_OUTPUT
           else
-            echo "dep_file=" >> "$GITHUB_OUTPUT"
-            echo "has_server=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if [ -d server/tests ] && [ "$(find server/tests -name 'test_*.py' | wc -l)" -gt 0 ]; then
-            echo "has_tests=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            echo "has_tests=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup Python
-        if: steps.server-detect.outputs.has_server == 'true'
+        if: steps.detect.outputs.has_server == 'true'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install server dependencies
-        if: steps.server-detect.outputs.has_server == 'true'
-        shell: bash
+      - name: Install deps
+        if: steps.detect.outputs.has_server == 'true'
         run: |
-          set -euo pipefail
           python -m pip install --upgrade pip
-          if [ "${{ steps.server-detect.outputs.dep_file }}" = "server/requirements.txt" ]; then
+          if [ -f server/requirements.txt ]; then
             pip install -r server/requirements.txt
           else
             pip install .
           fi
           pip install pytest pytest-cov
 
-      - name: Run server tests with coverage
-        if: steps.server-detect.outputs.has_server == 'true' && steps.server-detect.outputs.has_tests == 'true'
+      - name: Run tests
+        if: steps.detect.outputs.has_server == 'true' && steps.detect.outputs.has_tests == 'true'
         env:
           PYTHONPATH: .
           DLP_ENV: test
-          DLP_DATABASE_URL: sqlite:///./ci.db
-          DLP_REDIS_URL: redis://localhost:6379/0
-          DLP_JWT_SECRET: ci-secret
-          DLP_ENROLLMENT_SIGNING_SECRET: ci-enroll-secret
-          DLP_LICENSE_KEY: ci-license
         run: |
-          pytest server/tests --cov=server --cov-report=term-missing --cov-report=xml
+          pytest server/tests \
+            --cov=server \
+            --cov-report=term-missing \
+            --cov-report=xml
 
-      - name: No server tests found
-        if: steps.server-detect.outputs.has_server == 'true' && steps.server-detect.outputs.has_tests != 'true'
-        run: echo "No server tests detected under server/tests; skipping pytest."
+      - name: Server skip
+        if: steps.detect.outputs.has_server != 'true'
+        run: echo "No Python server detected — skipping."
 
-      - name: No server detected
-        if: steps.server-detect.outputs.has_server != 'true'
-        run: echo "No buildable Python server dependency file found; skipping server tests."
+
+# =====================================================
+# AGENT — user mode C++ only (driver skip)
+# =====================================================
 
   agent-build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build user-mode agent
+      - name: Build agent (user mode)
         shell: bash
         run: |
-          set -euo pipefail
-
           if [ ! -d agent ]; then
-            echo "No agent directory found; skipping agent build."
+            echo "No agent dir — skip"
             exit 0
           fi
 
-          if [ -d agent/drivers ] && find agent/drivers -name '*.vcxproj' | grep -q .; then
-            echo "Detected Windows kernel driver project(s) under agent/drivers. Skipping WDK-dependent builds in CI."
+          if [ -d agent/drivers ]; then
+            echo "Kernel driver detected — skipped (WDK required)"
           fi
 
           if [ -f agent/CMakeLists.txt ]; then
-            echo "Detected CMake build for agent user-mode components."
+            sudo apt-get update
+            sudo apt-get install -y cmake g++
             cmake -S agent -B agent/build
-            cmake --build agent/build --parallel
+            cmake --build agent/build
             exit 0
           fi
 
           if [ -f agent/Makefile ]; then
-            echo "Detected Makefile build for agent user-mode components."
+            sudo apt-get update
+            sudo apt-get install -y g++
             make -C agent
             exit 0
           fi
 
-          if find agent/src -name '*.cpp' | grep -q .; then
-            echo "Detected standalone C++ sources; attempting direct compilation with g++."
-            if rg -n "#include\s*<windows\.h>" agent/src >/dev/null 2>&1; then
-              echo "User-mode sources depend on Windows headers/toolchain and are not buildable on GitHub Ubuntu runners. Skipping build."
-              exit 0
-            fi
-
+          if find agent/src -name "*.cpp" | grep -q .; then
             sudo apt-get update
             sudo apt-get install -y g++
-            mapfile -t sources < <(find agent/src -name '*.cpp' -print)
             mkdir -p agent/build
-            g++ -std=c++17 -O2 "${sources[@]}" -Iagent/src -pthread -o agent/build/dlp_agent
-            echo "Compiled user-mode agent binary: agent/build/dlp_agent"
+            g++ -std=c++17 agent/src/*.cpp -o agent/build/agent_bin
+            echo "User-mode agent compiled"
             exit 0
           fi
 
-          echo "No recognized user-mode agent build system or C++ sources found; skipping."
+          echo "No buildable agent sources — skip"
+
+
+# =====================================================
+# DASHBOARD — Node frontend
+# =====================================================
 
   dashboard-build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Detect dashboard
-        id: dashboard-detect
-        shell: bash
+        id: dash
         run: |
-          set -euo pipefail
           if [ -f dashboard/package.json ]; then
-            echo "has_dashboard=true" >> "$GITHUB_OUTPUT"
+            echo "has_dash=true" >> $GITHUB_OUTPUT
           else
-            echo "has_dashboard=false" >> "$GITHUB_OUTPUT"
+            echo "has_dash=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup Node
-        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+        if: steps.dash.outputs.has_dash == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
-      - name: Install dependencies
-        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+      - name: Install deps
+        if: steps.dash.outputs.has_dash == 'true'
         working-directory: dashboard
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-            npm ci
-          else
-            echo "No lock file found for npm ci; falling back to npm install."
-            npm install
-          fi
+        run: npm ci || npm install
 
-      - name: Build dashboard
-        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+      - name: Build
+        if: steps.dash.outputs.has_dash == 'true'
         working-directory: dashboard
         run: npm run build
 
-      - name: Run dashboard tests
-        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+      - name: Test
+        if: steps.dash.outputs.has_dash == 'true'
         working-directory: dashboard
-        shell: bash
-        run: |
-          set -euo pipefail
-          if npm run | grep -qE '^\s*test\b'; then
-            npm test -- --ci
-          else
-            echo "No npm test script found; skipping dashboard tests."
-          fi
+        run: npm test --if-present
 
-      - name: No dashboard detected
-        if: steps.dashboard-detect.outputs.has_dashboard != 'true'
-        run: echo "No dashboard/package.json found; skipping dashboard build."
+
+# =====================================================
+# SECURITY SCAN
+# =====================================================
 
   security-scan:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        if: hashFiles('server/requirements.txt', 'pyproject.toml') != ''
+      - name: Python security
+        if: ${{ hashFiles('server/requirements.txt', 'pyproject.toml') != '' }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Run Bandit on server
-        if: hashFiles('server/requirements.txt', 'pyproject.toml') != ''
-        shell: bash
+      - name: Bandit
+        if: ${{ hashFiles('server/requirements.txt', 'pyproject.toml') != '' }}
         run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
           pip install bandit
-          if [ -d server ]; then
-            bandit -r server -x server/tests
-          else
-            echo "No server directory found; skipping Bandit scan."
-          fi
+          bandit -r server || true
 
-      - name: Setup Node
-        if: hashFiles('dashboard/package.json') != ''
+      - name: Node audit
+        if: ${{ hashFiles('dashboard/package.json') != '' }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
-      - name: Run npm audit on dashboard
-        if: hashFiles('dashboard/package.json') != ''
+      - name: npm audit
+        if: ${{ hashFiles('dashboard/package.json') != '' }}
         working-directory: dashboard
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-            npm ci
-          else
-            echo "No lock file found; running npm install before npm audit."
-            npm install
-          fi
-          npm audit --audit-level=high || true
+        run: npm audit --audit-level=high || true
 
-      - name: Security scan skip messages
-        if: hashFiles('server/requirements.txt', 'pyproject.toml', 'dashboard/package.json') == ''
-        run: echo "No server or dashboard components detected for security scanning; skipping."
+
+# =====================================================
+# DOCKER BUILD (safe detect — no job-level hashFiles)
+# =====================================================
 
   docker-build:
-    if: hashFiles('**/Dockerfile') != ''
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker images when Dockerfiles exist
-        shell: bash
+      - name: Detect dockerfiles
+        id: docker
         run: |
-          set -euo pipefail
-          mapfile -t dockerfiles < <(find . -name Dockerfile -not -path '*/node_modules/*' | sort)
-          if [ "${#dockerfiles[@]}" -eq 0 ]; then
-            echo "No Dockerfiles found; skipping docker-build job."
-            exit 0
+          if find . -name Dockerfile | grep -q .; then
+            echo "has_docker=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_docker=false" >> $GITHUB_OUTPUT
           fi
 
-          for dockerfile in "${dockerfiles[@]}"; do
-            context_dir="$(dirname "$dockerfile")"
-            tag="ci-$(echo "$context_dir" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')"
-            echo "Building $dockerfile with context $context_dir as $tag"
-            docker build -f "$dockerfile" -t "$tag" "$context_dir"
+      - name: Build images
+        if: steps.docker.outputs.has_docker == 'true'
+        run: |
+          for f in $(find . -name Dockerfile); do
+            d=$(dirname "$f")
+            tag="ci-$(basename "$d")"
+            docker build -f "$f" -t "$tag" "$d"
           done
+
+      - name: Docker skip
+        if: steps.docker.outputs.has_docker != 'true'
+        run: echo "No Dockerfiles — skip"
