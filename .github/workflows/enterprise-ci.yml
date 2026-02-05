@@ -71,49 +71,33 @@ jobs:
 # AGENT — user mode C++ only (driver skip)
 # =====================================================
 
-  agent-build:
+   agent-build:
     runs-on: ubuntu-latest
-
+  
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build agent (user mode)
+  
+      - name: Detect agent platform
+        id: detect
         shell: bash
         run: |
-          if [ ! -d agent ]; then
-            echo "No agent dir — skip"
-            exit 0
+          if rg -n "#include\s*<windows\.h>" agent/src >/dev/null 2>&1; then
+            echo "windows_only=true" >> $GITHUB_OUTPUT
+          else
+            echo "windows_only=false" >> $GITHUB_OUTPUT
           fi
-
-          if [ -d agent/drivers ]; then
-            echo "Kernel driver detected — skipped (WDK required)"
-          fi
-
-          if [ -f agent/CMakeLists.txt ]; then
-            sudo apt-get update
-            sudo apt-get install -y cmake g++
-            cmake -S agent -B agent/build
-            cmake --build agent/build
-            exit 0
-          fi
-
-          if [ -f agent/Makefile ]; then
-            sudo apt-get update
-            sudo apt-get install -y g++
-            make -C agent
-            exit 0
-          fi
-
-          if find agent/src -name "*.cpp" | grep -q .; then
-            sudo apt-get update
-            sudo apt-get install -y g++
-            mkdir -p agent/build
-            g++ -std=c++17 agent/src/*.cpp -o agent/build/agent_bin
-            echo "User-mode agent compiled"
-            exit 0
-          fi
-
-          echo "No buildable agent sources — skip"
+  
+      - name: Skip Windows-only agent
+        if: steps.detect.outputs.windows_only == 'true'
+        run: echo "Windows-only agent detected — skipping build on Linux runner."
+  
+      - name: Build portable C++ agent
+        if: steps.detect.outputs.windows_only != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++
+          mkdir -p agent/build
+          g++ -std=c++17 agent/src/*.cpp -o agent/build/agent_bin
 
 
 # =====================================================
