@@ -1,5 +1,5 @@
-from server.policy.engine import PolicyEngine
 from server.models.models import PolicyRule
+from server.policy.engine import PolicyEngine
 
 
 def test_policy_engine_matches_keyword():

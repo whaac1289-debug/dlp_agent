@@ -1,13 +1,13 @@
-from sqlalchemy.orm import Session
-from rq import Queue
 from redis import Redis
+from rq import Queue
+from sqlalchemy.orm import Session
 
 from server.config import settings
-from server.models import models
-from server.policy.engine import PolicyEngine
-from server.policy.cache import PolicyCache
 from server.detection.pipeline import run_detection
-from server.metrics.collector import record_metric, metrics
+from server.metrics.collector import metrics, record_metric
+from server.models import models
+from server.policy.cache import PolicyCache
+from server.policy.engine import PolicyEngine
 from server.siem.exporter import send_syslog
 
 redis_conn = Redis.from_url(settings.redis_url)
@@ -34,7 +34,7 @@ def process_event_with_session(db: Session, event_data: dict) -> tuple[str, str 
         file_path=event_data.get("file_path"),
         file_hash=event_data.get("file_hash"),
         file_size=event_data.get("file_size"),
-        metadata=event_data.get("metadata"),
+        event_metadata=event_data.get("metadata"),
         user_context=event_data.get("user_context"),
     )
     db.add(event)

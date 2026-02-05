@@ -1,19 +1,25 @@
+import secrets
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-import secrets
 
-from server.security.deps import get_db
-from server.security.auth import create_agent_token, decode_agent_token
-from server.security.signing import verify_signature
-from server.security.replay import replay_protection
-from server.security.enrollment import hash_token, verify_enrollment_package
 from server.config import settings
-from datetime import datetime
-from server.models import models
-from server.schemas.agent import AgentRegisterRequest, AgentRegisterResponse, AgentHeartbeat, AgentConfigResponse
-from server.schemas.event import EventCreate, EventBatchCreate
 from server.ingest.queue import enqueue_event, process_event_with_session
 from server.metrics.collector import metrics
+from server.models import models
+from server.schemas.agent import (
+    AgentConfigResponse,
+    AgentHeartbeat,
+    AgentRegisterRequest,
+    AgentRegisterResponse,
+)
+from server.schemas.event import EventBatchCreate, EventCreate
+from server.security.auth import create_agent_token, decode_agent_token
+from server.security.deps import get_db
+from server.security.enrollment import hash_token, verify_enrollment_package
+from server.security.replay import replay_protection
+from server.security.signing import verify_signature
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -25,7 +31,7 @@ def _get_agent_from_jwt(request: Request, db: Session) -> models.Agent:
     token = auth.split(" ", 1)[1]
     try:
         payload = decode_agent_token(token)
-    except Exception as exc:
+    except Exception:
         raise HTTPException(status_code=401, detail="invalid token")
     agent_uuid = payload.get("sub")
     agent = db.query(models.Agent).filter_by(agent_uuid=agent_uuid).first()

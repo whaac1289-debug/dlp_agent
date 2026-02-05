@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-
 DEFAULT_RULE_PATHS = (
     "rules/pii_rules.json",
     "rules/secret_rules.json",

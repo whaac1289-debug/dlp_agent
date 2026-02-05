@@ -1,19 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.responses import Response
 
 from server.api.v1.api import api_router
 from server.config import settings
-from server.security.auth import get_password_hash
+from server.license.validator import validate_license
 from server.models import models
 from server.models.session import SessionLocal
-from server.security.rate_limit import RateLimitMiddleware
-from server.rbac.middleware import RBACMiddleware
-from server.license.validator import validate_license
-from server.policy.rule_loader import load_rule_sets, iter_rules
 from server.policy.cache import PolicyCache
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from starlette.responses import Response
+from server.policy.rule_loader import iter_rules, load_rule_sets
+from server.rbac.middleware import RBACMiddleware
+from server.security.auth import get_password_hash
+from server.security.rate_limit import RateLimitMiddleware
 
 
 def create_app() -> FastAPI:

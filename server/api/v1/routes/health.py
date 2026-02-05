@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 from redis import Redis
+from sqlalchemy import text
 
 from server.config import settings
-from server.models.session import SessionLocal
-from sqlalchemy import text
 from server.ingest.queue import queue
+from server.models.session import SessionLocal
 
 router = APIRouter(tags=["health"])
 

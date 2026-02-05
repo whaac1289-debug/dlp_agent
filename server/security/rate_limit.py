@@ -1,7 +1,8 @@
 import time
+
 from fastapi import HTTPException, Request
-from starlette.middleware.base import BaseHTTPMiddleware
 from redis import Redis
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from server.config import settings
 

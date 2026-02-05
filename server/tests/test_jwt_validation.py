@@ -1,8 +1,7 @@
 import importlib
-import os
 from datetime import datetime, timedelta
 
-from jose import jwt, JWTError
+from jose import JWTError, jwt
 
 
 def _reload_settings(monkeypatch):
