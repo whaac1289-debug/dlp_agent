@@ -6,13 +6,13 @@ from jose import JWTError, jwt
 
 def _reload_settings(monkeypatch):
     monkeypatch.setenv("DLP_ENV", "test")
-    monkeypatch.setenv("DLP_JWT_SECRET", "test-secret")
+    monkeypatch.setenv("DLP_JWT_SECRET", "test-secret-value-with-sufficient-length")
     monkeypatch.setenv("DLP_DATABASE_URL", "sqlite://")
     monkeypatch.setenv("DLP_REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("DLP_ADMIN_EMAIL", "admin@example.com")
-    monkeypatch.setenv("DLP_ADMIN_PASSWORD", "Admin-Password-123!")
+    monkeypatch.setenv("DLP_ADMIN_PASSWORD", "Admin-Password-123!-long-value")
     monkeypatch.setenv("DLP_LICENSE_KEY", "license-test")
-    monkeypatch.setenv("DLP_ENROLLMENT_SIGNING_SECRET", "enroll-secret")
+    monkeypatch.setenv("DLP_ENROLLMENT_SIGNING_SECRET", "test-enrollment-signing-secret-long")
     import server.config
     import server.security.auth
 

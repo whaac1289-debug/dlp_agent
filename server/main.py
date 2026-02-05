@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from jose import jwt
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
 
@@ -38,10 +37,6 @@ def create_app() -> FastAPI:
     def metrics_endpoint():
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-    def _jwt_decode(token: str):
-        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-
-    app.state.jwt_decode = _jwt_decode
     app.state.policy_cache = PolicyCache()
 
     def _ensure_secure_defaults():

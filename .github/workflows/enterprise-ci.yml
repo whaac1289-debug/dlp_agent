@@ -6,12 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-
-# =========================
-# SERVER TESTS
-# =========================
-
   server-tests:
     runs-on: ubuntu-latest
     steps:
@@ -22,15 +20,15 @@ jobs:
         shell: bash
         run: |
           if [ -f server/requirements.txt ] || [ -f pyproject.toml ]; then
-            echo "has_server=true" >> $GITHUB_OUTPUT
+            echo "has_server=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_server=false" >> $GITHUB_OUTPUT
+            echo "has_server=false" >> "$GITHUB_OUTPUT"
           fi
 
           if [ -d server/tests ]; then
-            echo "has_tests=true" >> $GITHUB_OUTPUT
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_tests=false" >> $GITHUB_OUTPUT
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-python@v5
@@ -45,7 +43,7 @@ jobs:
           if [ -f server/requirements.txt ]; then
             pip install -r server/requirements.txt
           else
-            pip install . || true
+            pip install .
           fi
           pip install pytest pytest-cov
 
@@ -56,21 +54,21 @@ jobs:
           DLP_ENV: test
           DLP_DATABASE_URL: sqlite:///./ci.db
           DLP_REDIS_URL: redis://localhost:6379/0
-          DLP_JWT_SECRET: ci-secret
+          DLP_JWT_SECRET: ci-secret-value-with-sufficient-length
+          DLP_ADMIN_EMAIL: admin@example.com
+          DLP_ADMIN_PASSWORD: ci-admin-password-value-strong
+          DLP_LICENSE_KEY: ci-license-key-example
+          DLP_ENROLLMENT_SIGNING_SECRET: ci-enrollment-signing-secret-strong
+          DLP_ALLOWED_ORIGINS: '["http://localhost:3000"]'
         run: |
           pytest server/tests \
             --cov=server \
             --cov-report=term-missing \
-            --cov-report=xml || true
+            --cov-report=xml
 
       - name: Skip server
         if: steps.detect.outputs.has_server != 'true'
         run: echo "No server — skipped"
-
-
-# =========================
-# AGENT BUILD (SAFE)
-# =========================
 
   agent-build:
     runs-on: ubuntu-latest
@@ -81,10 +79,10 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [ -d agent/src ] && grep -R "windows.h" agent/src >/dev/null 2>&1; then
-            echo "windows_only=true" >> $GITHUB_OUTPUT
+          if [ -d agent/src ] && rg "windows.h" agent/src >/dev/null 2>&1; then
+            echo "windows_only=true" >> "$GITHUB_OUTPUT"
           else
-            echo "windows_only=false" >> $GITHUB_OUTPUT
+            echo "windows_only=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Skip Windows agent
@@ -101,12 +99,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++
           mkdir -p agent/build
-          g++ -std=c++17 agent/src/*.cpp -o agent/build/agent_bin || true
-
-
-# =========================
-# DASHBOARD
-# =========================
+          g++ -std=c++17 agent/src/*.cpp -o agent/build/agent_bin
 
   dashboard-build:
     runs-on: ubuntu-latest
@@ -117,9 +110,9 @@ jobs:
         id: detect
         run: |
           if [ -f dashboard/package.json ]; then
-            echo "has_dashboard=true" >> $GITHUB_OUTPUT
+            echo "has_dashboard=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_dashboard=false" >> $GITHUB_OUTPUT
+            echo "has_dashboard=false" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-node@v4
@@ -132,25 +125,20 @@ jobs:
         working-directory: dashboard
         run: |
           if [ -f package-lock.json ]; then
-            npm ci
+            npm ci --ignore-scripts
           else
-            npm install
+            npm install --ignore-scripts
           fi
 
       - name: Build
         if: steps.detect.outputs.has_dashboard == 'true'
         working-directory: dashboard
-        run: npm run build || true
+        run: npm run build
 
       - name: Test
         if: steps.detect.outputs.has_dashboard == 'true'
         working-directory: dashboard
-        run: npm test -- --ci || true
-
-
-# =========================
-# SECURITY SCAN
-# =========================
+        run: npm test -- --ci
 
   security-scan:
     runs-on: ubuntu-latest
@@ -166,38 +154,32 @@ jobs:
         run: |
           pip install bandit
           if [ -d server ]; then
-            bandit -r server || true
+            bandit -r server
           fi
 
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
 
-
-# =========================
-# DOCKER BUILD (FIXED CONTEXT)
-# =========================
-
   docker-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-  
+
       - name: Build Dockerfiles with correct context
         shell: bash
         run: |
-          set -e
-  
+          set -euo pipefail
+
           mapfile -t files < <(find . -name Dockerfile)
-  
+
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No Dockerfiles — skipped"
             exit 0
           fi
-  
+
           for f in "${files[@]}"; do
             tag=$(echo "ci-$f" | tr '/.' '-' | tr '[:upper:]' '[:lower:]')
-  
-            # ==== CONTEXT LOGIC ====
+
             if [[ "$f" == *"server/Dockerfile"* ]]; then
               ctx="."
             elif [[ "$f" == *"dashboard/Dockerfile"* ]]; then
@@ -205,10 +187,10 @@ jobs:
             else
               ctx=$(dirname "$f")
             fi
-  
+
             echo "Building $f"
             echo "Context: $ctx"
             echo "Tag: $tag"
-  
+
             docker build -f "$f" -t "$tag" "$ctx"
           done
