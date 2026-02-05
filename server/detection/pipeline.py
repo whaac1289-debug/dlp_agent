@@ -1,6 +1,6 @@
-from dataclasses import dataclass
 import math
 import re
+from dataclasses import dataclass
 
 from server.models import models
 

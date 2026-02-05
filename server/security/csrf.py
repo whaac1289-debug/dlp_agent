@@ -1,4 +1,5 @@
 import secrets
+
 from fastapi import Header, HTTPException, Request
 
 from server.config import settings

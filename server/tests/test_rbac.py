@@ -1,8 +1,8 @@
 import pytest
 from fastapi import HTTPException
 
-from server.rbac.deps import require_roles
 from server.models.models import Role, User
+from server.rbac.deps import require_roles
 
 
 def test_rbac_rejects_viewer_for_admin_action():

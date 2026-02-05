@@ -1,25 +1,31 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
-from fastapi.responses import StreamingResponse
 import csv
 import io
 import secrets
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from jose import JWTError
 
-from server.security.deps import get_current_user
-from server.security.auth import create_access_token, create_refresh_token, verify_password, decode_refresh_token
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
+from jose import JWTError
+from sqlalchemy.orm import Session
+
 from server.config import settings
+from server.metrics.collector import metrics
 from server.models import models
 from server.models.session import get_db
-from server.schemas.auth import LoginRequest, Token, RefreshRequest
-from server.schemas.admin import AgentSummary, EventSummary, AlertSummary
-from server.schemas.policy import PolicyCreate
-from server.schemas.enrollment import EnrollmentTokenCreate, EnrollmentTokenResponse
-from server.security.csrf import csrf_protect, set_csrf_cookie
 from server.rbac.deps import require_roles
+from server.schemas.admin import AgentSummary, AlertSummary, EventSummary
+from server.schemas.auth import LoginRequest, RefreshRequest, Token
+from server.schemas.enrollment import EnrollmentTokenCreate, EnrollmentTokenResponse
+from server.schemas.policy import PolicyCreate
+from server.security.auth import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    verify_password,
+)
+from server.security.csrf import csrf_protect, set_csrf_cookie
+from server.security.deps import get_current_user
 from server.security.enrollment import hash_token
-from server.metrics.collector import metrics
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

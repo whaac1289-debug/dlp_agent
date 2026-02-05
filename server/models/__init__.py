@@ -1,7 +1,7 @@
 from server.models.models import (  # noqa: F401
-    Alert,
     Agent,
     AgentConfig,
+    Alert,
     AuditLog,
     EnrollmentToken,
     Event,
@@ -10,6 +10,6 @@ from server.models.models import (  # noqa: F401
     PolicyRule,
     Role,
     Tenant,
-    User,
     UsbDevice,
+    User,
 )

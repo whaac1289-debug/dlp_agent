@@ -1,12 +1,14 @@
 import datetime as dt
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON, Index
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from server.models.base import Base
+from server.db.base import Base
 
 
 class Tenant(Base):
     __tablename__ = "tenants"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     name = Column(String(120), unique=True, nullable=False)
@@ -15,6 +17,7 @@ class Tenant(Base):
 
 class Role(Base):
     __tablename__ = "roles"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     name = Column(String(50), unique=True, nullable=False)
@@ -22,6 +25,7 @@ class Role(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
@@ -37,6 +41,7 @@ class User(Base):
 
 class Agent(Base):
     __tablename__ = "agents"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
@@ -56,6 +61,7 @@ class Agent(Base):
 
 class AgentConfig(Base):
     __tablename__ = "agent_configs"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
@@ -68,6 +74,7 @@ class AgentConfig(Base):
 
 class UsbDevice(Base):
     __tablename__ = "usb_devices"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
@@ -80,6 +87,7 @@ class UsbDevice(Base):
 
 class Event(Base):
     __tablename__ = "events"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     event_id = Column(String(64), unique=True, nullable=False, index=True)
@@ -89,7 +97,7 @@ class Event(Base):
     file_path = Column(Text)
     file_hash = Column(String(128))
     file_size = Column(Integer)
-    metadata = Column(JSON)
+    event_metadata = Column("metadata", JSON)
     user_context = Column(JSON)
     created_at = Column(DateTime, default=dt.datetime.utcnow, index=True)
 
@@ -98,6 +106,7 @@ class Event(Base):
 
 class Policy(Base):
     __tablename__ = "policies"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
@@ -110,6 +119,7 @@ class Policy(Base):
 
 class PolicyRule(Base):
     __tablename__ = "policy_rules"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
@@ -134,6 +144,7 @@ class PolicyRule(Base):
 
 class Alert(Base):
     __tablename__ = "alerts"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
@@ -147,6 +158,7 @@ class Alert(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
@@ -158,6 +170,7 @@ class AuditLog(Base):
 
 class LoginHistory(Base):
     __tablename__ = "login_history"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -168,6 +181,7 @@ class LoginHistory(Base):
 
 class EnrollmentToken(Base):
     __tablename__ = "enrollment_tokens"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)

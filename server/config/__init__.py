@@ -6,7 +6,6 @@ from .dev import DevConfig
 from .prod import ProdConfig
 from .test import TestConfig
 
-
 ENV_MAP = {
     "dev": DevConfig,
     "prod": ProdConfig,

@@ -3,8 +3,8 @@ from jose import JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from server.security.auth import decode_access_token
 from server.config import settings
+from server.security.auth import decode_access_token
 
 
 class RBACMiddleware(BaseHTTPMiddleware):
