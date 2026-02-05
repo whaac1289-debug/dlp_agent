@@ -357,31 +357,44 @@ jobs:
           path: gitleaks.sarif
 
   agent-build:
-    needs: discover
-    if: needs.discover.outputs.has_agent_dir == 'true'
-    runs-on: ${{ needs.discover.outputs.agent_build_system == 'msbuild' && 'windows-latest' || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build with MSBuild
-        if: needs.discover.outputs.agent_build_system == 'msbuild'
-        shell: pwsh
-        run: msbuild agent/drivers/dlp_minifilter.vcxproj /p:Configuration=Release /p:Platform=x64
-      - name: Build with Make
-        if: needs.discover.outputs.agent_build_system == 'make'
-        run: |
-          if [ -f Makefile ]; then
-            make "${{ needs.discover.outputs.agent_make_target }}"
-          elif [ -f agent/Makefile ]; then
-            make -C agent "${{ needs.discover.outputs.agent_make_target }}"
-          else
-            echo "No Makefile found for agent build" >&2
-            exit 1
-          fi
-      - name: Agent smoke check when build system not confirmed
-        if: needs.discover.outputs.agent_build_system == 'none'
-        run: |
-          test -f agent/src/main.cpp
-          test -f agent/src/rule_engine.cpp
+      needs: discover
+      if: needs.discover.outputs.has_agent_dir == 'true'
+      runs-on: ${{ needs.discover.outputs.agent_build_system == 'msbuild' && 'windows-latest' || 'ubuntu-latest' }}
+    
+      steps:
+        - uses: actions/checkout@v4
+    
+        - name: Setup MSBuild
+          if: needs.discover.outputs.agent_build_system == 'msbuild'
+          uses: microsoft/setup-msbuild@v2
+    
+        
+        - name: Setup Visual Studio Dev Cmd
+          if: needs.discover.outputs.agent_build_system == 'msbuild'
+          uses: ilammy/msvc-dev-cmd@v1
+    
+        - name: Build with MSBuild
+          if: needs.discover.outputs.agent_build_system == 'msbuild'
+          run: msbuild agent/drivers/dlp_minifilter.vcxproj /p:Configuration=Release /p:Platform=x64
+    
+        - name: Build with Make
+          if: needs.discover.outputs.agent_build_system == 'make'
+          run: |
+            if [ -f Makefile ]; then
+              make "${{ needs.discover.outputs.agent_make_target }}"
+            elif [ -f agent/Makefile ]; then
+              make -C agent "${{ needs.discover.outputs.agent_make_target }}"
+            else
+              echo "No Makefile found for agent build" >&2
+              exit 1
+            fi
+    
+        - name: Agent smoke check when build system not confirmed
+          if: needs.discover.outputs.agent_build_system == 'none'
+          run: |
+            test -f agent/src/main.cpp
+            test -f agent/src/rule_engine.cpp
+
 
   api-smoke-test:
     needs: [discover, backend-test]
