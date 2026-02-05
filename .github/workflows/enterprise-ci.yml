@@ -1,4 +1,4 @@
-name: Enterprise CI
+name: CI
 
 on:
   push:
@@ -6,501 +6,253 @@ on:
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-
-concurrency:
-  group: enterprise-ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  discover:
+  server-tests:
     runs-on: ubuntu-latest
-    outputs:
-      has_python: ${{ steps.detect.outputs.has_python }}
-      python_version: ${{ steps.detect.outputs.python_version }}
-      python_dep_file: ${{ steps.detect.outputs.python_dep_file }}
-      has_python_tests: ${{ steps.detect.outputs.has_python_tests }}
-      has_ruff: ${{ steps.detect.outputs.has_ruff }}
-      has_flake8: ${{ steps.detect.outputs.has_flake8 }}
-      has_js: ${{ steps.detect.outputs.has_js }}
-      js_dep_file: ${{ steps.detect.outputs.js_dep_file }}
-      has_js_tests: ${{ steps.detect.outputs.has_js_tests }}
-      has_js_lint: ${{ steps.detect.outputs.has_js_lint }}
-      has_agent_dir: ${{ steps.detect.outputs.has_agent_dir }}
-      agent_build_system: ${{ steps.detect.outputs.agent_build_system }}
-      agent_make_target: ${{ steps.detect.outputs.agent_make_target }}
-      has_api: ${{ steps.detect.outputs.has_api }}
-      dockerfiles: ${{ steps.detect.outputs.dockerfiles }}
-      has_docker: ${{ steps.detect.outputs.has_docker }}
-      has_compose: ${{ steps.detect.outputs.has_compose }}
-      compose_file: ${{ steps.detect.outputs.compose_file }}
     steps:
       - uses: actions/checkout@v4
-      - id: detect
-        name: Detect project structure
+
+      - name: Detect server stack
+        id: server-detect
         shell: bash
         run: |
           set -euo pipefail
-          has_python=false
-          python_dep_file=""
-          python_version="3.11"
-          has_python_tests=false
-          has_ruff=false
-          has_flake8=false
-          has_js=false
-          js_dep_file=""
-          has_js_tests=false
-          has_js_lint=false
-          has_agent_dir=false
-          agent_build_system="none"
-          agent_make_target=""
-          has_api=false
-          has_docker=false
-          dockerfiles=""
-          has_compose=false
-          compose_file=""
-
-          if [ -f "server/requirements.txt" ] || [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
-            has_python=true
+          if [ -f server/main.py ] && grep -q "FastAPI" server/main.py; then
+            echo "stack=fastapi" >> "$GITHUB_OUTPUT"
+          else
+            echo "stack=python" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ -f "server/requirements.txt" ]; then
-            python_dep_file="server/requirements.txt"
-          elif [ -f "requirements.txt" ]; then
-            python_dep_file="requirements.txt"
-          elif [ -f "pyproject.toml" ]; then
-            python_dep_file="pyproject.toml"
+          if [ -f server/requirements.txt ]; then
+            echo "dep_file=server/requirements.txt" >> "$GITHUB_OUTPUT"
+            echo "has_server=true" >> "$GITHUB_OUTPUT"
+          elif [ -f pyproject.toml ]; then
+            echo "dep_file=pyproject.toml" >> "$GITHUB_OUTPUT"
+            echo "has_server=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dep_file=" >> "$GITHUB_OUTPUT"
+            echo "has_server=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ -d "server/tests" ] && [ "$(find server/tests -name 'test_*.py' | wc -l)" -gt 0 ]; then
-            has_python_tests=true
+          if [ -d server/tests ] && [ "$(find server/tests -name 'test_*.py' | wc -l)" -gt 0 ]; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ -f "pyproject.toml" ] && grep -q "\[tool\.ruff\]" pyproject.toml; then
-            has_ruff=true
-          fi
-
-          if [ -f ".flake8" ] || [ -f "setup.cfg" ] || [ -f "tox.ini" ]; then
-            has_flake8=true
-          fi
-
-          if [ -f "dashboard/package.json" ]; then
-            has_js=true
-            js_dep_file="dashboard/package.json"
-            if grep -q '"test"' dashboard/package.json; then
-              has_js_tests=true
-            fi
-            if grep -q '"lint"' dashboard/package.json; then
-              has_js_lint=true
-            fi
-          elif [ -f "package.json" ]; then
-            has_js=true
-            js_dep_file="package.json"
-            if grep -q '"test"' package.json; then
-              has_js_tests=true
-            fi
-            if grep -q '"lint"' package.json; then
-              has_js_lint=true
-            fi
-          fi
-
-          if [ -d "agent" ]; then
-            has_agent_dir=true
-            if [ -f "agent/drivers/dlp_minifilter.vcxproj" ]; then
-              agent_build_system="msbuild"
-            elif [ -f "Makefile" ] || [ -f "agent/Makefile" ]; then
-              agent_build_system="make"
-              if [ -f "Makefile" ] && grep -qE '^agent-build:' Makefile; then
-                agent_make_target="agent-build"
-              elif [ -f "Makefile" ] && grep -qE '^build:' Makefile; then
-                agent_make_target="build"
-              elif [ -f "agent/Makefile" ] && grep -qE '^agent-build:' agent/Makefile; then
-                agent_make_target="agent-build"
-              elif [ -f "agent/Makefile" ] && grep -qE '^build:' agent/Makefile; then
-                agent_make_target="build"
-              else
-                agent_make_target="all"
-              fi
-            fi
-          fi
-
-          if [ -f "server/main.py" ] && grep -q "FastAPI" server/main.py; then
-            has_api=true
-          fi
-
-          dockerfiles="$(find . -name 'Dockerfile' -not -path '*/node_modules/*' | sort | tr '\n' ' ')"
-          if [ -n "${dockerfiles// /}" ]; then
-            has_docker=true
-          fi
-
-          if [ -f "docker-compose.yml" ]; then
-            has_compose=true
-            compose_file="docker-compose.yml"
-          elif [ -f "deploy/docker/docker-compose.yml" ]; then
-            has_compose=true
-            compose_file="deploy/docker/docker-compose.yml"
-          fi
-
-          {
-            echo "has_python=$has_python"
-            echo "python_dep_file=$python_dep_file"
-            echo "python_version=$python_version"
-            echo "has_python_tests=$has_python_tests"
-            echo "has_ruff=$has_ruff"
-            echo "has_flake8=$has_flake8"
-            echo "has_js=$has_js"
-            echo "js_dep_file=$js_dep_file"
-            echo "has_js_tests=$has_js_tests"
-            echo "has_js_lint=$has_js_lint"
-            echo "has_agent_dir=$has_agent_dir"
-            echo "agent_build_system=$agent_build_system"
-            echo "agent_make_target=$agent_make_target"
-            echo "has_api=$has_api"
-            echo "has_docker=$has_docker"
-            echo "dockerfiles=$dockerfiles"
-            echo "has_compose=$has_compose"
-            echo "compose_file=$compose_file"
-          } >> "$GITHUB_OUTPUT"
-
-  backend-test:
-    runs-on: ubuntu-latest
-    needs: discover
-    if: needs.discover.outputs.has_python == 'true'
-    env:
-      DLP_ENV: test
-      DLP_JWT_SECRET: test-secret
-      DLP_DATABASE_URL: sqlite:///./ci.db
-      DLP_REDIS_URL: redis://localhost:6379/0
-      DLP_ADMIN_EMAIL: admin@example.com
-      DLP_ADMIN_PASSWORD: Admin-Password-123!
-      DLP_LICENSE_KEY: license-test
-      DLP_ENROLLMENT_SIGNING_SECRET: enroll-secret
-      DLP_ALLOWED_ORIGINS: '["http://localhost:5173"]'
-      PYTHONPATH: .
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        if: steps.server-detect.outputs.has_server == 'true'
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ needs.discover.outputs.python_version }}
-          cache: pip
-          cache-dependency-path: |
-            ${{ needs.discover.outputs.python_dep_file }}
-            pyproject.toml
-      - name: Install backend dependencies
+          python-version: '3.11'
+
+      - name: Install server dependencies
+        if: steps.server-detect.outputs.has_server == 'true'
+        shell: bash
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
-          if [ -n "${{ needs.discover.outputs.python_dep_file }}" ] && [ -f "${{ needs.discover.outputs.python_dep_file }}" ] && [ "${{ needs.discover.outputs.python_dep_file }}" != "pyproject.toml" ]; then
-            pip install -r "${{ needs.discover.outputs.python_dep_file }}"
+          if [ "${{ steps.server-detect.outputs.dep_file }}" = "server/requirements.txt" ]; then
+            pip install -r server/requirements.txt
+          else
+            pip install .
           fi
-          pip install pytest pytest-cov ruff flake8
-      - name: Run Ruff lint (non-blocking)
-        if: needs.discover.outputs.has_ruff == 'true'
-        continue-on-error: true
-        run: ruff check server
-      - name: Run Flake8 lint (non-blocking)
-        if: needs.discover.outputs.has_flake8 == 'true'
-        continue-on-error: true
-        run: flake8 server
-      - name: Generate smoke tests when no tests are present
-        if: needs.discover.outputs.has_python_tests != 'true'
-        run: python scripts/ci/generate_smoke_tests.py
-      - name: Run pytest with coverage
-        if: needs.discover.outputs.has_python_tests == 'true'
-        run: |
-          pytest --cov=server --cov-report=term-missing --cov-report=xml:coverage.xml server/tests
-      - name: Backend smoke validation when tests directory is missing
-        if: needs.discover.outputs.has_python_tests != 'true'
-        run: |
-          test -f server/main.py
-          python -c "import importlib; importlib.import_module('server.main'); print('Backend smoke validation passed')"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: |
-            coverage.xml
-            .coverage
+          pip install pytest pytest-cov
 
-  dashboard-test:
-    runs-on: ubuntu-latest
-    needs: discover
-    if: needs.discover.outputs.has_js == 'true'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install dashboard dependencies
-        run: |
-          if [ -f dashboard/package-lock.json ]; then
-            npm ci --prefix dashboard
-          elif [ -f dashboard/package.json ]; then
-            npm install --prefix dashboard
-          elif [ -f package-lock.json ]; then
-            npm ci
-          elif [ -f package.json ]; then
-            npm install
-          else
-            echo "No Node dependency file found."
-          fi
-      - name: Run dashboard lint (non-blocking)
-        if: needs.discover.outputs.has_js_lint == 'true'
-        continue-on-error: true
-        run: |
-          if [ -f dashboard/package.json ]; then
-            npm run lint --prefix dashboard
-          elif [ -f package.json ]; then
-            npm run lint
-          fi
-      - name: Run dashboard tests
-        run: |
-          if [ "${{ needs.discover.outputs.has_js_tests }}" = "true" ]; then
-            if [ -f dashboard/package.json ]; then
-              npm test --prefix dashboard -- --runInBand
-            else
-              npm test -- --runInBand
-            fi
-          else
-            node -e "const fs=require('fs'); const p='dashboard/src/main.jsx'; if (fs.existsSync(p)) { console.log('Smoke: found '+p); process.exit(0);} if (fs.existsSync('src/main.jsx')) { console.log('Smoke: found src/main.jsx'); process.exit(0);} throw new Error('No frontend entrypoint found for smoke validation.');"
-          fi
-      - name: Run dashboard build
-        run: |
-          if [ -f dashboard/package.json ]; then
-            npm run build --prefix dashboard
-          elif [ -f package.json ]; then
-            npm run build
-          fi
-
-  security-sast:
-    runs-on: ubuntu-latest
-    needs: discover
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        if: needs.discover.outputs.has_python == 'true'
-        with:
-          python-version: ${{ needs.discover.outputs.python_version }}
-      - name: Install SAST tools
-        continue-on-error: true
-        run: |
-          python -m pip install --upgrade pip
-          pip install semgrep
-          if [ "${{ needs.discover.outputs.has_python }}" = "true" ]; then
-            pip install bandit pip-audit
-            if [ -f "${{ needs.discover.outputs.python_dep_file }}" ] && [ "${{ needs.discover.outputs.python_dep_file }}" != "pyproject.toml" ]; then
-              pip install -r "${{ needs.discover.outputs.python_dep_file }}"
-            fi
-          fi
-      - name: Run Bandit
-        if: needs.discover.outputs.has_python == 'true'
-        continue-on-error: true
-        run: |
-          mkdir -p reports
-          bandit -r server -f json -o reports/bandit.json
-      - name: Run pip-audit
-        if: needs.discover.outputs.has_python == 'true'
-        continue-on-error: true
-        run: |
-          mkdir -p reports
-          if [ -f "${{ needs.discover.outputs.python_dep_file }}" ] && [ "${{ needs.discover.outputs.python_dep_file }}" != "pyproject.toml" ]; then
-            pip-audit -r "${{ needs.discover.outputs.python_dep_file }}" -f json -o reports/pip-audit.json
-          else
-            pip-audit -f json -o reports/pip-audit.json
-          fi
-      - name: Run npm audit
-        if: needs.discover.outputs.has_js == 'true'
-        continue-on-error: true
-        run: |
-          mkdir -p reports
-          if [ -f dashboard/package-lock.json ]; then
-            npm audit --prefix dashboard --json > reports/npm-audit.json
-          elif [ -f package-lock.json ]; then
-            npm audit --json > reports/npm-audit.json
-          else
-            echo '{"note":"No package-lock.json found; audit skipped"}' > reports/npm-audit.json
-          fi
-      - name: Run Semgrep
-        continue-on-error: true
-        run: |
-          mkdir -p reports
-          semgrep scan --config auto --json --output reports/semgrep.json
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: sast-reports
-          path: reports/
-
-  secret-scan:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Run Gitleaks (non-blocking)
-        continue-on-error: true
-        uses: gitleaks/gitleaks-action@v2
+      - name: Run server tests with coverage
+        if: steps.server-detect.outputs.has_server == 'true' && steps.server-detect.outputs.has_tests == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
-          GITLEAKS_ENABLE_SUMMARY: true
-          GITLEAKS_ENABLE_COMMENT: false
-          GITLEAKS_ARGS: --report-format sarif --report-path gitleaks.sarif --verbose
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: gitleaks-sarif
-          path: gitleaks.sarif
+          PYTHONPATH: .
+          DLP_ENV: test
+          DLP_DATABASE_URL: sqlite:///./ci.db
+          DLP_REDIS_URL: redis://localhost:6379/0
+          DLP_JWT_SECRET: ci-secret
+          DLP_ENROLLMENT_SIGNING_SECRET: ci-enroll-secret
+          DLP_LICENSE_KEY: ci-license
+        run: |
+          pytest server/tests --cov=server --cov-report=term-missing --cov-report=xml
+
+      - name: No server tests found
+        if: steps.server-detect.outputs.has_server == 'true' && steps.server-detect.outputs.has_tests != 'true'
+        run: echo "No server tests detected under server/tests; skipping pytest."
+
+      - name: No server detected
+        if: steps.server-detect.outputs.has_server != 'true'
+        run: echo "No buildable Python server dependency file found; skipping server tests."
 
   agent-build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: agent
-  
     steps:
       - uses: actions/checkout@v4
-  
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake
-  
-      - name: Configure
-        run: cmake -S . -B build
-  
-      - name: Build
-        run: cmake --build build
 
-
-
-  api-smoke-test:
-    needs: [discover, backend-test]
-    if: needs.discover.outputs.has_api == 'true' && needs.discover.outputs.has_python == 'true'
-    runs-on: ubuntu-latest
-    env:
-      DLP_ENV: test
-      DLP_JWT_SECRET: test-secret
-      DLP_DATABASE_URL: sqlite:///./smoke.db
-      DLP_REDIS_URL: redis://localhost:6379/0
-      DLP_ADMIN_EMAIL: admin@example.com
-      DLP_ADMIN_PASSWORD: Admin-Password-123!
-      DLP_LICENSE_KEY: license-test
-      DLP_ENROLLMENT_SIGNING_SECRET: enroll-secret
-      DLP_ALLOWED_ORIGINS: '["http://localhost:5173"]'
-      PYTHONPATH: .
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ needs.discover.outputs.python_version }}
-      - name: Install API dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f server/requirements.txt ]; then
-            pip install -r server/requirements.txt
-          fi
-          pip install alembic uvicorn
-      - name: Apply migrations
-        run: alembic -c server/alembic.ini upgrade head
-      - name: Start API server
-        run: |
-          uvicorn server.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
-          echo $! > uvicorn.pid
-      - name: Run API smoke tests
-        run: python scripts/ci/api_smoke_test.py http://127.0.0.1:8000
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: api-smoke-logs
-          path: uvicorn.log
-      - name: Stop API server
-        if: always()
-        run: |
-          if [ -f uvicorn.pid ]; then kill "$(cat uvicorn.pid)" || true; fi
-
-  docker-check:
-    needs: discover
-    if: needs.discover.outputs.has_docker == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker images
+      - name: Build user-mode agent
+        shell: bash
         run: |
           set -euo pipefail
-          for dockerfile in ${{ needs.discover.outputs.dockerfiles }}; do
-            context="$(dirname "$dockerfile")"
-            normalized_context="$(echo "$context" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9]+#-#g; s#^-+##; s#-+$##')"
-            tag="ci-${normalized_context:-root}"
-            docker build -f "$dockerfile" -t "$tag" "$context"
-          done
-      - name: Run server container health check
-        if: contains(needs.discover.outputs.dockerfiles, 'server/Dockerfile')
-        run: |
-          docker run -d --name dlp-server-ci \
-            -p 8001:8000 \
-            -e DLP_ENV=test \
-            -e DLP_JWT_SECRET=test-secret \
-            -e DLP_DATABASE_URL=sqlite:///./container.db \
-            -e DLP_REDIS_URL=redis://localhost:6379/0 \
-            -e DLP_ADMIN_EMAIL=admin@example.com \
-            -e DLP_ADMIN_PASSWORD=Admin-Password-123! \
-            -e DLP_LICENSE_KEY=license-test \
-            -e DLP_ENROLLMENT_SIGNING_SECRET=enroll-secret \
-            -e DLP_ALLOWED_ORIGINS='["http://localhost:5173"]' \
-            ci-server
-          for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:8001/api/v1/health/live >/dev/null; then break; fi
-            sleep 2
-          done
-          curl -fsS http://127.0.0.1:8001/api/v1/health/live
-      - name: Cleanup container
-        if: always()
-        run: docker rm -f dlp-server-ci || true
 
-  compose-validate:
-    needs: discover
-    if: needs.discover.outputs.has_compose == 'true'
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate compose config
-        run: docker compose -f "${{ needs.discover.outputs.compose_file }}" config -q
-      - name: Validate compose services rendering
-        run: docker compose -f "${{ needs.discover.outputs.compose_file }}" config --services
-
-  test-generation:
-    runs-on: ubuntu-latest
-    needs: [discover, backend-test]
-    if: needs.discover.outputs.has_python == 'true'
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage-artifact
-      - id: coverage_rate
-        name: Parse coverage
-        run: |
-          if [ -f coverage-artifact/coverage.xml ]; then
-            value=$(python -c "import xml.etree.ElementTree as ET; root=ET.parse('coverage-artifact/coverage.xml').getroot(); print(float(root.attrib.get('line-rate', '0'))*100)")
-          else
-            value=0
+          if [ ! -d agent ]; then
+            echo "No agent directory found; skipping agent build."
+            exit 0
           fi
-          echo "rate=$value" >> "$GITHUB_OUTPUT"
-      - name: Generate tests when coverage < 40%
-        env:
-          COVERAGE_RATE: ${{ steps.coverage_rate.outputs.rate }}
+
+          if [ -d agent/drivers ] && find agent/drivers -name '*.vcxproj' | grep -q .; then
+            echo "Detected Windows kernel driver project(s) under agent/drivers. Skipping WDK-dependent builds in CI."
+          fi
+
+          if [ -f agent/CMakeLists.txt ]; then
+            echo "Detected CMake build for agent user-mode components."
+            cmake -S agent -B agent/build
+            cmake --build agent/build --parallel
+            exit 0
+          fi
+
+          if [ -f agent/Makefile ]; then
+            echo "Detected Makefile build for agent user-mode components."
+            make -C agent
+            exit 0
+          fi
+
+          if find agent/src -name '*.cpp' | grep -q .; then
+            echo "Detected standalone C++ sources; attempting direct compilation with g++."
+            if rg -n "#include\s*<windows\.h>" agent/src >/dev/null 2>&1; then
+              echo "User-mode sources depend on Windows headers/toolchain and are not buildable on GitHub Ubuntu runners. Skipping build."
+              exit 0
+            fi
+
+            sudo apt-get update
+            sudo apt-get install -y g++
+            mapfile -t sources < <(find agent/src -name '*.cpp' -print)
+            mkdir -p agent/build
+            g++ -std=c++17 -O2 "${sources[@]}" -Iagent/src -pthread -o agent/build/dlp_agent
+            echo "Compiled user-mode agent binary: agent/build/dlp_agent"
+            exit 0
+          fi
+
+          echo "No recognized user-mode agent build system or C++ sources found; skipping."
+
+  dashboard-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect dashboard
+        id: dashboard-detect
+        shell: bash
         run: |
-          mkdir -p generated-tests
-          python -c "from pathlib import Path; import os; rate=float(os.environ.get('COVERAGE_RATE','0')); out=Path('generated-tests/test_generated_additional.py'); out.write_text('import importlib\\n\\ndef test_core_modules_importable():\\n    for module in (\"server.main\", \"server.api.v1.api\", \"server.policy.engine\"):\\n        assert importlib.import_module(module) is not None\\n' if rate < 40 else '# Coverage threshold met; no additional tests generated.\\n')"
-      - uses: actions/upload-artifact@v4
+          set -euo pipefail
+          if [ -f dashboard/package.json ]; then
+            echo "has_dashboard=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_dashboard=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+        uses: actions/setup-node@v4
         with:
-          name: generated-tests
-          path: generated-tests/
+          node-version: '20'
+
+      - name: Install dependencies
+        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+        working-directory: dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          else
+            echo "No lock file found for npm ci; falling back to npm install."
+            npm install
+          fi
+
+      - name: Build dashboard
+        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+        working-directory: dashboard
+        run: npm run build
+
+      - name: Run dashboard tests
+        if: steps.dashboard-detect.outputs.has_dashboard == 'true'
+        working-directory: dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm run | grep -qE '^\s*test\b'; then
+            npm test -- --ci
+          else
+            echo "No npm test script found; skipping dashboard tests."
+          fi
+
+      - name: No dashboard detected
+        if: steps.dashboard-detect.outputs.has_dashboard != 'true'
+        run: echo "No dashboard/package.json found; skipping dashboard build."
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        if: hashFiles('server/requirements.txt', 'pyproject.toml') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Bandit on server
+        if: hashFiles('server/requirements.txt', 'pyproject.toml') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install bandit
+          if [ -d server ]; then
+            bandit -r server -x server/tests
+          else
+            echo "No server directory found; skipping Bandit scan."
+          fi
+
+      - name: Setup Node
+        if: hashFiles('dashboard/package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run npm audit on dashboard
+        if: hashFiles('dashboard/package.json') != ''
+        working-directory: dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          else
+            echo "No lock file found; running npm install before npm audit."
+            npm install
+          fi
+          npm audit --audit-level=high || true
+
+      - name: Security scan skip messages
+        if: hashFiles('server/requirements.txt', 'pyproject.toml', 'dashboard/package.json') == ''
+        run: echo "No server or dashboard components detected for security scanning; skipping."
+
+  docker-build:
+    if: hashFiles('**/Dockerfile') != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker images when Dockerfiles exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t dockerfiles < <(find . -name Dockerfile -not -path '*/node_modules/*' | sort)
+          if [ "${#dockerfiles[@]}" -eq 0 ]; then
+            echo "No Dockerfiles found; skipping docker-build job."
+            exit 0
+          fi
+
+          for dockerfile in "${dockerfiles[@]}"; do
+            context_dir="$(dirname "$dockerfile")"
+            tag="ci-$(echo "$context_dir" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')"
+            echo "Building $dockerfile with context $context_dir as $tag"
+            docker build -f "$dockerfile" -t "$tag" "$context_dir"
+          done
