@@ -182,9 +182,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
   
-      - name: Build Dockerfiles
+      - name: Build Dockerfiles with correct context
         shell: bash
         run: |
+          set -e
+  
           mapfile -t files < <(find . -name Dockerfile)
   
           if [ "${#files[@]}" -eq 0 ]; then
@@ -195,12 +197,18 @@ jobs:
           for f in "${files[@]}"; do
             tag=$(echo "ci-$f" | tr '/.' '-' | tr '[:upper:]' '[:lower:]')
   
-            if grep -q "COPY server/" "$f"; then
+            # ==== CONTEXT LOGIC ====
+            if [[ "$f" == *"server/Dockerfile"* ]]; then
               ctx="."
+            elif [[ "$f" == *"dashboard/Dockerfile"* ]]; then
+              ctx="./dashboard"
             else
               ctx=$(dirname "$f")
             fi
   
-            echo "Building $f with context $ctx → tag=$tag"
+            echo "Building $f"
+            echo "Context: $ctx"
+            echo "Tag: $tag"
+  
             docker build -f "$f" -t "$tag" "$ctx"
           done
