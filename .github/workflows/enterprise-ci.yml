@@ -134,14 +134,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build Dockerfiles
+  
+      - name: Build Dockerfiles with correct context
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
+  
           mapfile -t files < <(find . -name Dockerfile)
-
+  
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No Dockerfiles — skipped"
+            exit 0
+          fi
+  
           for f in "${files[@]}"; do
             tag=$(echo "ci-$f" | tr '/.' '-' | tr '[:upper:]' '[:lower:]')
-            echo "Building $f"
-            docker build -f "$f" -t "$tag" .
+  
+            if [[ "$f" == *"dashboard/Dockerfile"* ]]; then
+              ctx="./dashboard"
+            elif [[ "$f" == *"server/Dockerfile"* ]]; then
+              ctx="."
+            else
+              ctx=$(dirname "$f")
+            fi
+  
+            echo "------------------------"
+            echo "Dockerfile: $f"
+            echo "Context: $ctx"
+            echo "Tag: $tag"
+            echo "------------------------"
+  
+            docker build -f "$f" -t "$tag" "$ctx"
           done
+
