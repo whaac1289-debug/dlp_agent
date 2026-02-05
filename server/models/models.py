@@ -89,7 +89,7 @@ class Event(Base):
     file_path = Column(Text)
     file_hash = Column(String(128))
     file_size = Column(Integer)
-    metadata = Column(JSON)
+    event_metadata = Column(JSON)
     user_context = Column(JSON)
     created_at = Column(DateTime, default=dt.datetime.utcnow, index=True)
 
