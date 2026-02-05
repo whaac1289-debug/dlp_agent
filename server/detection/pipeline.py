@@ -44,15 +44,33 @@ def _severity_for_score(score: int) -> str:
     return "low"
 
 
+def _extract_content(event_payload: dict) -> str:
+    """Safely resolve scan content from metadata or payload fallbacks."""
+    metadata = event_payload.get("metadata")
+    if isinstance(metadata, dict):
+        content = metadata.get("content")
+        if isinstance(content, str):
+            return content
+        if content is not None:
+            return str(content)
+
+    payload_content = event_payload.get("content")
+    if isinstance(payload_content, str):
+        return payload_content
+    if payload_content is not None:
+        return str(payload_content)
+
+    return ""
+
+
 def run_detection(event_payload: dict, rules: list[models.PolicyRule]) -> DetectionReport:
     findings: list[DetectionFinding] = []
-    metadata = event_payload.get("metadata") or {}
-    content = metadata.get("content", "")
+    content = _extract_content(event_payload)
     file_hash = (event_payload.get("file_hash") or "").lower()
     file_path = event_payload.get("file_path") or ""
 
     entropy_score = _entropy(content)
-    if entropy_score >= 4.0:
+    if entropy_score >= 2.75:
         findings.append(
             DetectionFinding(
                 detector="entropy",
